@@ -8,6 +8,11 @@ export function setAccessToken(token: string | null): void {
   accessToken = token
 }
 
+/** SSE / fetch 流式请求需要手动带上内存中的 access token */
+export function getAccessToken(): string | null {
+  return accessToken
+}
+
 export function setSessionExpiredHandler(handler: (() => void) | null): void {
   sessionExpiredHandler = handler
 }

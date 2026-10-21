@@ -21,6 +21,7 @@ dependencies = [
     "openai>=1.58",
     "json-repair>=0.30",
     "pypinyin>=0.55.0",
+    "arq>=0.28.0",
 ]
 
 [dependency-groups]

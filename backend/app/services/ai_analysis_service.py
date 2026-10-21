@@ -20,6 +20,7 @@ from app.schemas.company import FinancialData, FundFlowData, SentimentData
 from app.schemas.search import WebSearchResult
 from app.services.analyst_service import build_analysts
 from app.services.decision_service import build_decision
+from app.services.discussion_service import build_discussion
 from app.services.llm_analyst_service import build_llm_analysts
 from app.services.web_search_service import sources_for_response
 
@@ -216,8 +217,12 @@ async def generate_ai_analysis(
     )
 
     if progress is not None:
+        await progress("团队讨论中")
+    discussion = await build_discussion(llm_client, quote, technical, analysts)
+
+    if progress is not None:
         await progress("首席策略官汇总六份报告")
-    decision = await build_decision(llm_client, quote, technical, analysts, web)
+    decision = await build_decision(llm_client, quote, technical, analysts, web, discussion)
     headline = _headline_from_decision(decision, technical)
 
     now = datetime.now(TZ_SHANGHAI)
@@ -246,6 +251,7 @@ async def generate_ai_analysis(
         analysis=headline,
         analysts=analysts,
         decision=decision,
+        discussion=discussion,
         web_search_used=web_used,
         web_sources=sources_for_response(web) if web_used else [],
         disclaimer=DISCLAIMER,

@@ -1,7 +1,7 @@
 """AI 分析后台任务：Redis 状态机 + 进程内 runner。
 
-LLM 可能耗时数分钟，HTTP 请求只负责创建任务和轮询状态，避免网关/浏览器超时。
-后续迁移到 ARQ 时，保持 job 状态结构不变即可。
+LLM 可能耗时数分钟，HTTP 请求只负责创建任务；进度通过 SSE（Redis Pub/Sub）
+或轮询读取。后续迁移到 ARQ 时，保持 job 状态结构不变即可。
 """
 
 import asyncio
@@ -10,6 +10,8 @@ import uuid
 from datetime import datetime
 from zoneinfo import ZoneInfo
 
+from arq import create_pool
+from arq.connections import ArqRedis, RedisSettings
 from redis.asyncio import Redis
 
 from app.core.config import settings
@@ -45,12 +47,21 @@ logger = get_logger(__name__)
 TZ_SHANGHAI = ZoneInfo("Asia/Shanghai")
 _TASKS: set[asyncio.Task] = set()
 
+# worker 心跳：API 据此判断队列是否有人在消费
+WORKER_HEARTBEAT_KEY = "ai:worker:alive"
+_ARQ_POOL: ArqRedis | None = None
+_ARQ_LOCK = asyncio.Lock()
+
 
 class AIJobNotFoundError(Exception):
     pass
 
 
 class AIJobForbiddenError(Exception):
+    pass
+
+
+class AIWorkerUnavailableError(Exception):
     pass
 
 
@@ -71,6 +82,35 @@ def _with_elapsed(state: AIJobState) -> AIJobState:
     return state.model_copy(update={"elapsed_seconds": elapsed})
 
 
+def job_events_channel(job_id: str) -> str:
+    """SSE 事件通道：job 状态每次落 Redis 后向订阅者广播。"""
+    return f"ai:job:events:{job_id}"
+
+
+async def _get_arq_pool() -> ArqRedis:
+    global _ARQ_POOL
+    if _ARQ_POOL is None:
+        async with _ARQ_LOCK:
+            if _ARQ_POOL is None:
+                _ARQ_POOL = await create_pool(RedisSettings.from_dsn(settings.redis_url))
+    return _ARQ_POOL
+
+
+async def close_arq_pool() -> None:
+    global _ARQ_POOL
+    if _ARQ_POOL is not None:
+        await _ARQ_POOL.aclose()
+        _ARQ_POOL = None
+
+
+async def worker_alive(redis: Redis) -> bool:
+    try:
+        return bool(await redis.exists(WORKER_HEARTBEAT_KEY))
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("检查 ARQ worker 心跳失败: %s", exc)
+        return False
+
+
 async def _save_state(
     redis: Redis,
     job_id: str,
@@ -87,6 +127,10 @@ async def _save_state(
         json.dumps(payload, ensure_ascii=False),
         ex=settings.llm_job_ttl_seconds,
     )
+    try:
+        await redis.publish(job_events_channel(job_id), state.model_dump_json())
+    except Exception as exc:  # noqa: BLE001 - 推送失败不影响任务本身
+        logger.warning("发布 AI job 事件失败 job_id=%s: %s", job_id, exc)
     return state
 
 
@@ -163,6 +207,9 @@ async def start_ai_job(
         except (AIJobNotFoundError, AIJobForbiddenError):
             pass
 
+    if settings.ai_job_execution == "arq" and not await worker_alive(redis):
+        raise AIWorkerUnavailableError("分析队列未启动，请先运行 npm run worker")
+
     job_id = uuid.uuid4().hex
     now = _now()
     state = AIJobState(
@@ -180,6 +227,24 @@ async def start_ai_job(
         ex=settings.llm_active_job_ttl_seconds,
     )
 
+    if settings.ai_job_execution == "arq":
+        try:
+            pool = await _get_arq_pool()
+            await pool.enqueue_job(
+                "run_ai_job",
+                job_id,
+                str(user_id),
+                daily_quota,
+                symbol,
+                _job_id=job_id,
+            )
+        except Exception as exc:  # noqa: BLE001 - 入队失败要让用户看到明确错误
+            logger.exception("AI 任务入队失败 job_id=%s: %s", job_id, exc)
+            await redis.delete(_job_key(job_id))
+            await redis.delete(_active_key(user_id, symbol))
+            raise AIWorkerUnavailableError("分析队列暂时不可用，请稍后重试") from exc
+        return state
+
     task = asyncio.create_task(
         _run_job(job_id, redis, user_id, daily_quota, symbol),
         name=f"ai-job-{job_id}",
@@ -187,6 +252,17 @@ async def start_ai_job(
     _TASKS.add(task)
     task.add_done_callback(_TASKS.discard)
     return state
+
+
+async def run_ai_job_task(
+    redis: Redis,
+    job_id: str,
+    user_id: object,
+    daily_quota: int,
+    symbol: str,
+) -> None:
+    """ARQ worker 入口：复用同一套状态机。"""
+    await _run_job(job_id, redis, user_id, daily_quota, symbol)
 
 
 async def _run_job(

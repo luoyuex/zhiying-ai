@@ -5,6 +5,7 @@ import { useRoute } from 'vue-router'
 import type { AIAnalysisResponse } from '@/api/ai'
 import { reportsApi } from '@/api/reports'
 import AppShell from '@/components/layout/AppShell.vue'
+import DiscussionTimeline from '@/components/report/DiscussionTimeline.vue'
 import PublicInfoPanel from '@/components/report/PublicInfoPanel.vue'
 import { getErrorMessage } from '@/utils/errors'
 import { formatQuoteTime, formatSourceList } from '@/utils/market'
@@ -360,6 +361,12 @@ watch(
           </div>
         </div>
       </section>
+
+      <DiscussionTimeline
+        v-if="report.discussion && report.discussion.turns.length"
+        class="mt-4"
+        :discussion="report.discussion"
+      />
 
       <section class="mt-4 rounded-lg border border-line bg-surface p-4 text-[11px] leading-relaxed text-ink-3">
         <div>数据覆盖：{{ coverageLabels.join('、') }}<template v-if="dataGaps.length">；数据缺口：{{ dataGaps.join('、') }}</template>。</div>

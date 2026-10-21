@@ -9,6 +9,7 @@ import json
 from typing import Any
 
 from app.llm.analyst_prompts import ANALYST_PROMPT_DIGEST
+from app.llm.discussion_prompts import DISCUSSION_PROMPT_DIGEST
 
 SYSTEM_PROMPT = """你是智赢 AI 的首席策略官。
 你会收到六位分析师（技术/基本面/资金面/风险/情绪/新闻）的报告、行情、代码计算的关键价位和公开网页信息。
@@ -21,7 +22,8 @@ missing 列出该维度缺失的数据。
 2. 评级只能是：买入 / 持有 / 卖出。
 3. 价位由系统代码计算，已在输入 levels 中给出；不要自行计算或修改价位。
 4. 六位分析师报告出现分歧时，要说明共识与分歧；engine 为 rule 或 missing 非空的维度，
-   要降低 confidence 并在 risks 中注明。
+   要降低 confidence 并在 risks 中注明；若输入包含 discussion（团队讨论纪要），
+   要吸收讨论后的收敛结论，并在 consensus/dissent 中体现保留的分歧。
 5. 公开网页信息只作新闻/事件背景，必须核对日期，不能当作确定事实。
 6. 所有文字使用简体中文，避免空话，不承诺收益。
 
@@ -56,4 +58,6 @@ _PROMPT_DIGEST = hashlib.sha256(
     (SYSTEM_PROMPT + USER_PROMPT_TEMPLATE).encode("utf-8")
 ).hexdigest()[:12]
 
-PROMPT_VERSION = f"multi_agent_decision.v2:{_PROMPT_DIGEST}-{ANALYST_PROMPT_DIGEST}"
+PROMPT_VERSION = (
+    f"multi_agent_decision.v3:{_PROMPT_DIGEST}-{ANALYST_PROMPT_DIGEST}-{DISCUSSION_PROMPT_DIGEST}"
+)

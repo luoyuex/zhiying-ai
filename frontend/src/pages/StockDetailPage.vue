@@ -2,11 +2,18 @@
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 
-import { aiApi, type AIAnalysisResponse, type AIConfig, type AIJobState } from '@/api/ai'
+import {
+  aiApi,
+  streamJob,
+  type AIAnalysisResponse,
+  type AIConfig,
+  type AIJobState,
+} from '@/api/ai'
 import { marketApi, type KlineSeries, type Quote, type TechnicalAnalysis } from '@/api/market'
 import { reportsApi, type ReportSummary } from '@/api/reports'
 import AppShell from '@/components/layout/AppShell.vue'
 import MiniKline from '@/components/market/MiniKline.vue'
+import DiscussionTimeline from '@/components/report/DiscussionTimeline.vue'
 import PublicInfoPanel from '@/components/report/PublicInfoPanel.vue'
 import Button from '@/components/ui/Button.vue'
 import Input from '@/components/ui/Input.vue'
@@ -63,6 +70,8 @@ const history = ref<ReportSummary[]>([])
 const historyLoading = ref(false)
 const historyError = ref('')
 let aiPollTimer: ReturnType<typeof setTimeout> | null = null
+let aiElapsedTimer: ReturnType<typeof setInterval> | null = null
+let aiStreamAbort: AbortController | null = null
 const period = ref<PeriodValue>('day')
 const adjust = ref<AdjustValue>('qfq')
 let quoteSeq = 0
@@ -273,15 +282,18 @@ async function runAIAnalysis(): Promise<void> {
   aiJobId.value = null
   aiPhase.value = '提交任务'
   aiElapsed.value = 0
+  if (aiElapsedTimer === null) {
+    aiElapsedTimer = setInterval(() => {
+      if (aiLoading.value) aiElapsed.value += 1
+    }, 1000)
+  }
 
   try {
     const { data } = await aiApi.startAnalysis(code.value)
     if (seq !== aiRequestSeq) return
     aiJobId.value = data.job_id
     if (applyAIJob(data)) return
-    aiPollTimer = setTimeout(() => {
-      void pollAIJob()
-    }, 1200)
+    void openAIStream(data.job_id, seq)
   } catch (err) {
     if (seq !== aiRequestSeq) return
     aiError.value = getErrorMessage(err, '提交 AI 分析任务失败')
@@ -296,6 +308,53 @@ function stopAIPolling(): void {
   if (aiPollTimer !== null) {
     clearTimeout(aiPollTimer)
     aiPollTimer = null
+  }
+  if (aiElapsedTimer !== null) {
+    clearInterval(aiElapsedTimer)
+    aiElapsedTimer = null
+  }
+  if (aiStreamAbort !== null) {
+    aiStreamAbort.abort()
+    aiStreamAbort = null
+  }
+}
+
+function schedulePollingFallback(): void {
+  if (aiPollTimer !== null) clearTimeout(aiPollTimer)
+  aiPollTimer = setTimeout(() => {
+    void pollAIJob()
+  }, 1500)
+}
+
+async function openAIStream(jobId: string, seq: number): Promise<void> {
+  aiStreamAbort?.abort()
+  const controller = new AbortController()
+  aiStreamAbort = controller
+
+  try {
+    await streamJob(
+      jobId,
+      (event) => {
+        if (seq !== aiRequestSeq || jobId !== aiJobId.value) return
+        if (event.type === 'error') {
+          schedulePollingFallback()
+          return
+        }
+        if (event.job && applyAIJob(event.job)) {
+          controller.abort()
+        }
+      },
+      controller.signal,
+    )
+
+    // 流结束但任务未到终态（代理缓冲/服务重启），退回轮询
+    if (seq === aiRequestSeq && jobId === aiJobId.value && aiLoading.value) {
+      schedulePollingFallback()
+    }
+  } catch {
+    if (controller.signal.aborted) return
+    if (seq !== aiRequestSeq || jobId !== aiJobId.value) return
+    schedulePollingFallback()
   }
 }
 
@@ -854,6 +913,13 @@ onBeforeUnmount(() => {
                 </div>
               </div>
             </div>
+
+            <DiscussionTimeline
+              v-if="aiReport.discussion && aiReport.discussion.turns.length"
+              class="mt-4"
+              variant="flat"
+              :discussion="aiReport.discussion"
+            />
 
             <div class="mt-4 grid gap-5 lg:grid-cols-2">
               <div>

@@ -13,6 +13,7 @@ from app.core.logging import get_logger, setup_logging
 from app.db.redis import close_redis, get_redis
 from app.db.session import SessionLocal, engine
 from app.providers.http import close_http_client
+from app.services.ai_job_service import close_arq_pool
 
 setup_logging(settings.debug)
 logger = get_logger(__name__)
@@ -20,8 +21,14 @@ logger = get_logger(__name__)
 
 @asynccontextmanager
 async def lifespan(_: FastAPI):
-    logger.info("%s 后端启动 | debug=%s | email_mode=%s", settings.app_name, settings.debug, settings.email_mode)
+    logger.info(
+        "%s 后端启动 | debug=%s | email_mode=%s",
+        settings.app_name,
+        settings.debug,
+        settings.email_mode,
+    )
     yield
+    await close_arq_pool()
     await close_http_client()
     await close_redis()
     await engine.dispose()

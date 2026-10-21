@@ -4,7 +4,7 @@ from typing import Literal
 
 from pydantic import BaseModel, Field, field_validator
 
-from app.schemas.analyst import AnalystReport, FinalDecision
+from app.schemas.analyst import AnalystReport, FinalDecision, TeamDiscussion
 from app.schemas.search import WebSource
 
 RATING_ALIASES = {
@@ -110,6 +110,7 @@ class AIAnalysisResponse(BaseModel):
     analysis: AIAnalysisPayload
     analysts: list[AnalystReport] = Field(default_factory=list)
     decision: FinalDecision | None = None
+    discussion: TeamDiscussion | None = None
     web_search_used: bool = False
     web_sources: list[WebSource] = Field(default_factory=list)
     disclaimer: str

@@ -56,6 +56,14 @@ uv run uvicorn app.main:app --reload --port 8010
 
 后端地址 <http://127.0.0.1:8010>，接口文档 <http://127.0.0.1:8010/docs>，健康检查 `/health`。
 
+AI 分析任务由独立队列执行，另开一个终端启动 worker（不启动时发起分析会返回 503「分析队列未启动」）：
+
+```bash
+uv run arq app.worker.WorkerSettings
+```
+
+根目录等价命令：`npm run worker`。只做本地临时调试时可以设 `AI_JOB_EXECUTION=inline`，任务会退回进程内执行，重启即中断。
+
 初始化股票库（全量 A 股代码 / 名称 / 拼音，约 5900 只，用于查询补全）：
 
 ```bash
@@ -132,11 +140,13 @@ LLM_CACHE_SECONDS=21600
 
 改完重启后端。未配置时详情页会显示引导，不会发起 LLM 请求；配置后：
 - `GET /api/v1/ai/config` 返回 `configured=true` 与当前模型
-- 详情页「开始 AI 分析」提交后台任务，页面轮询 `GET /api/v1/ai/jobs/{job_id}`，展示阶段和已等待秒数
+- 详情页「开始 AI 分析」提交后台任务；进度优先走 SSE `GET /api/v1/ai/jobs/{job_id}/events`（snapshot / phase / done），连接失败自动回退轮询 `GET /api/v1/ai/jobs/{job_id}`
 - 每次成功生成消耗 1 次 `daily_analysis_quota`；同股同交易日 + 同模型 + 同提示词版本 6 小时内直接复用，不重复消耗
 - 任务在后台执行，页面切走不会中断；重新点击会复用仍在运行的任务
 
-> 一次分析会并发调用 6 位分析师（技术/基本面/资金面/风险/情绪/新闻），再由首席策略官汇总；单个分析师失败会自动回退到规则稿，并在报告中标记 `engine=rule`。整份报告仍只消耗 1 次额度。
+> 分析流程：六位分析师并发 → 团队讨论（LLM 整理 4-6 轮交叉回应）→ 首席策略官决策。任一步失败会自动回退到规则版，并在报告中标记 `engine=rule` / `source=rule`。整份报告仍只消耗 1 次额度。
+>
+> 任务执行：默认 `AI_JOB_EXECUTION=arq`，由 `npm run worker` 消费；API 重启不会中断分析，worker 优雅重启会等待在跑任务结束。worker 每 30 秒写入心跳 `ai:worker:alive`（TTL 120 秒），没有心跳时新任务直接返回 503。
 
 ---
 

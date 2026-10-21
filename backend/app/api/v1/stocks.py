@@ -15,7 +15,7 @@ from app.providers.symbols import InvalidSymbolError
 from app.schemas.ai import AIJobState
 from app.schemas.analysis import TechnicalAnalysis
 from app.schemas.stock import StockSearchItem
-from app.services.ai_job_service import start_ai_job
+from app.services.ai_job_service import AIWorkerUnavailableError, start_ai_job
 from app.services.market_service import MarketDataService
 from app.services.stock_directory_service import search_stocks as search_stock_directory
 from app.services.technical_analysis import InsufficientDataError, analyze_technicals
@@ -134,3 +134,5 @@ async def create_ai_analysis(
         raise errors.invalid_symbol(str(exc)) from exc
     except LLMNotConfiguredError as exc:
         raise errors.llm_not_configured() from exc
+    except AIWorkerUnavailableError as exc:
+        raise errors.ai_service_unavailable(str(exc)) from exc

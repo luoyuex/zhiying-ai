@@ -1,6 +1,7 @@
-"""AI 配置状态接口。"""
+"""AI 配置状态与任务接口。"""
 
 from fastapi import APIRouter, Depends
+from fastapi.responses import StreamingResponse
 from redis.asyncio import Redis
 
 from app.core import errors
@@ -17,6 +18,7 @@ from app.services.ai_job_service import (
     AIJobNotFoundError,
     get_ai_job,
 )
+from app.services.ai_job_stream import stream_job_events
 
 router = APIRouter(prefix="/ai", tags=["AI"])
 
@@ -48,3 +50,26 @@ async def get_job(
         raise errors.not_found("分析任务不存在或已过期") from exc
     except AIJobForbiddenError as exc:
         raise errors.forbidden() from exc
+
+
+@router.get("/jobs/{job_id}/events", summary="AI 分析任务事件流（SSE）")
+async def stream_job(
+    job_id: str,
+    user: User = Depends(get_current_user),
+    redis: Redis = Depends(get_redis),
+) -> StreamingResponse:
+    try:
+        state = await get_ai_job(redis, user.id, job_id)
+    except AIJobNotFoundError as exc:
+        raise errors.not_found("分析任务不存在或已过期") from exc
+    except AIJobForbiddenError as exc:
+        raise errors.forbidden() from exc
+
+    return StreamingResponse(
+        stream_job_events(redis, user.id, job_id, state),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache, no-transform",
+            "X-Accel-Buffering": "no",
+        },
+    )

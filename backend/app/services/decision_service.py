@@ -7,7 +7,7 @@ from app.llm.client import LLMClient, LLMError
 from app.llm.prompts import SYSTEM_PROMPT, build_user_prompt
 from app.providers.models import Quote
 from app.schemas.analysis import TechnicalAnalysis
-from app.schemas.analyst import AnalystReport, DecisionDraft, FinalDecision
+from app.schemas.analyst import AnalystReport, DecisionDraft, FinalDecision, TeamDiscussion
 from app.schemas.search import WebSearchResult
 
 logger = get_logger(__name__)
@@ -27,6 +27,7 @@ def build_decision_context(
     technical: TechnicalAnalysis,
     analysts: list[AnalystReport],
     web: WebSearchResult | None,
+    discussion: TeamDiscussion | None = None,
 ) -> dict[str, Any]:
     context: dict[str, Any] = {
         "quote": {
@@ -53,6 +54,11 @@ def build_decision_context(
             }
         ),
     }
+    if discussion is not None and discussion.turns:
+        context["discussion"] = {
+            "summary": discussion.summary,
+            "turns": [turn.model_dump() for turn in discussion.turns],
+        }
     if web is not None and web.success and web.pages:
         context["public_web_info"] = [
             {
@@ -135,8 +141,9 @@ async def build_decision(
     technical: TechnicalAnalysis,
     analysts: list[AnalystReport],
     web: WebSearchResult | None,
+    discussion: TeamDiscussion | None = None,
 ) -> FinalDecision:
-    context = build_decision_context(quote, technical, analysts, web)
+    context = build_decision_context(quote, technical, analysts, web, discussion)
     try:
         data = await llm_client.generate_json(SYSTEM_PROMPT, build_user_prompt(context))
         draft = DecisionDraft.model_validate(data)

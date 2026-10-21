@@ -76,6 +76,11 @@ class Settings(BaseSettings):
     llm_temperature: float = 0.3
     llm_cache_seconds: int = 21600
 
+    # 任务执行：arq 走独立 worker 进程（重启不中断）；inline 仅用于本地调试
+    ai_job_execution: Literal["arq", "inline"] = "arq"
+    ai_worker_max_jobs: int = 2
+    ai_worker_heartbeat_ttl_seconds: int = 120
+
     @property
     def llm_configured(self) -> bool:
         return bool(self.llm_base_url and self.llm_api_key and self.llm_model)

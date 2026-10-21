@@ -31,6 +31,44 @@ class AnalystReport(BaseModel):
     engine: Literal["rule", "llm"] = "rule"
 
 
+class DiscussionTurn(BaseModel):
+    speaker: str
+    target: str = ""
+    stance: Literal["同意", "补充", "质疑"] = "补充"
+    content: str
+
+    @field_validator("speaker", "target", mode="before")
+    @classmethod
+    def normalize_name(cls, value: object) -> str:
+        return str(value or "").strip().replace("分析师", "")[:16]
+
+    @field_validator("stance", mode="before")
+    @classmethod
+    def normalize_stance(cls, value: object) -> str:
+        text = str(value or "").strip()
+        if text in {"同意", "认可", "支持", "赞同"}:
+            return "同意"
+        if text in {"质疑", "反对", "反驳", "异议"}:
+            return "质疑"
+        return "补充"
+
+    @field_validator("content", mode="before")
+    @classmethod
+    def normalize_content(cls, value: object) -> str:
+        return str(value or "").strip()[:240]
+
+
+class TeamDiscussion(BaseModel):
+    turns: list[DiscussionTurn] = Field(default_factory=list)
+    summary: str = ""
+    source: Literal["llm", "rule"] = "rule"
+
+    @field_validator("summary", mode="before")
+    @classmethod
+    def normalize_summary(cls, value: object) -> str:
+        return str(value or "").strip()[:300]
+
+
 class AnalystDraft(BaseModel):
     """LLM 分析师输出：只允许改结论，数据来源与缺口由系统补齐。"""
 

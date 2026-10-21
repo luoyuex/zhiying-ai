@@ -1,7 +1,7 @@
 # 智赢 AI 开发计划与进度总览
 
 > 本文档是项目的唯一进度真相源。每完成一个阶段，更新「状态」列与「已完成清单」，避免范围漂移与重复劳动。
-> 最后更新：2026-10-21（P4：六位分析师逐位接 LLM + 逐位进度 + 引擎标记）
+> 最后更新：2026-10-21（P4：ARQ worker 独立进程执行任务）
 
 ---
 
@@ -47,7 +47,7 @@
 | P1 | 项目骨架 + 邮箱验证码认证 | ✅ 完成 | 2026-10-21 |
 | P2 | 行情数据层（Provider + 缓存/限流/熔断） | 🚧 进行中 | 报价/K线/财务/资金流/情绪/股票库已通 |
 | P3 | 个股页（报价/K线/指标） | 🚧 进行中 | 详情页 v1 已上线 |
-| P4 | Agent 编排 + 分析任务 + SSE 流式 | 🚧 进行中 | 六位分析师逐位 LLM + 首席决策已上线 |
+| P4 | Agent 编排 + 分析任务 + SSE 流式 | 🚧 进行中 | 六位分析师 LLM + 讨论 + SSE + ARQ 已上线 |
 | P5 | 分析报告页 + 评分卡 | 🚧 进行中 | 历史报告已落库 |
 | P6 | 自选股 + 分析历史对比 | 🚧 进行中 | 历史已落库，对比/自选待做 |
 | P7 | 管理后台 + 生产部署（Nginx/HTTPS） | ⬜ 未开始 | — |
@@ -417,6 +417,66 @@
 
 **说明**：当次东财资金流/指数接口被临时限流，资金面数据缺失，LLM 如实写入缺口并按中性处理，说明降级链路正常。
 
+### 4.23 团队讨论时间线（2026-10-21）
+
+**背景**：六份分析师报告与首席决策之间缺少交叉回应，报告读起来像六份并列结论；P4 需要把“讨论”补进链路。
+
+| 事项 | 内容 | 状态 |
+| --- | --- | --- |
+| 讨论生成 | 一次 LLM 圆桌整理 4-6 轮发言，`stance` 限定 同意/补充/质疑，必须点名回应另一位分析师；输入只含六份简报、价位与数据缺口 | ✅ |
+| 规则兜底 | LLM 空响应/超时/格式异常时，按评分最高与最低分析师生成 2-3 轮时间线，`source=rule`，报告不中断 | ✅ |
+| 决策联动 | 讨论纪要写入首席决策 context；提示词要求吸收收敛结论，并在 consensus/dissent 中体现保留分歧 | ✅ |
+| 展示 | 新增 `DiscussionTimeline.vue`（card/flat 两种形态），报告页放在六位分析师之后，个股 AI 卡展示紧凑版；旧报告无 `discussion` 自动隐藏 | ✅ |
+| 版本与进度 | `PROMPT_VERSION` 升到 v3 并入 discussion digest；job 新增「团队讨论中」阶段 | ✅ |
+
+**验收**
+- 真实 SenseNova 用同一份六分析师输入在 4096 / 8192 token 预算下均返回 6 轮讨论，分析师名字与 `target` 匹配成功
+- 真实 600519：讨论首次空响应自动回退规则版（2 轮），六位分析师与首席决策仍为 `llm`，报告正常完成
+- 后端 **82 passed**（新增 LLM 讨论入报告/决策、失败回退用例）；前端 `npm run build` 通过
+
+**说明**：推理模型偶尔会因思考耗尽 token 返回空内容，讨论已做规则兜底；若频繁出现可提高 `LLM_MAX_TOKENS`。
+
+### 4.24 SSE 实时进度（2026-10-21）
+
+**背景**：前端每 2 秒轮询一次 job，阶段间隔长时“已等待”会停住，六位分析师逐位完成也看不到即时反馈。
+
+| 事项 | 内容 | 状态 |
+| --- | --- | --- |
+| 事件流接口 | `GET /api/v1/ai/jobs/{job_id}/events`，`text/event-stream`；事件 `snapshot → phase* → done`，15s 心跳，终态后关闭 | ✅ |
+| 推送机制 | `_save_state` 每次落 Redis 后 publish 到 `ai:job:events:{job_id}`，与轮询共用同一状态源 | ✅ |
+| 竞态处理 | 先订阅再读快照，避免任务恰好在两次请求间完成而丢 `done`；快照即终态则立即发送 `done` | ✅ |
+| 前端读取 | `fetch + ReadableStream` 手动解析 SSE，带 Bearer 头（不把 token 放进 URL）；`AbortController` 随切股/卸载断开 | ✅ |
+| 降级 | 连接失败、代理缓冲或流意外结束 → 自动回退 2s 轮询，任务继续可用 | ✅ |
+| 计时 | 前端新增 1s 本地计时，阶段事件之间“已等待 N 秒”持续增长，收到事件时以服务端为准 | ✅ |
+
+**验收**
+- 新增 ASGI SSE 用例：`snapshot → phase → done` 顺序与终态关闭均通过；后端 **83 passed**
+- 前端 `npm run build`（vue-tsc + vite）通过；未新增依赖
+- 真实 LLM 任务仍由同一 job 状态机驱动，轮询接口保持不变
+
+**说明**：生产环境 Nginx 需对该路径关闭 `proxy_buffering`（`X-Accel-Buffering: no` 已返回），否则事件会被缓冲成一次性输出。
+
+### 4.25 ARQ worker（2026-10-21）
+
+**背景**：任务此前用进程内 asyncio task 执行，API 重启即中断，只能靠 stale 检测标记失败；P4 需要把执行与 API 进程解耦。
+
+| 事项 | 内容 | 状态 |
+| --- | --- | --- |
+| Worker | 新增 `app/worker.py`：`WorkerSettings` 注册 `run_ai_job`，复用现有 job 状态机；`max_jobs=2`、`max_tries=1`（避免失败重试重复扣费） |
+| 入队 | 默认 `AI_JOB_EXECUTION=arq`，`start_ai_job` 通过 ARQ pool `enqueue_job(..., _job_id=job_id)`，job_id 与状态键一致 |
+| 心跳 | 每 30 秒写入 `ai:worker:alive`（TTL 120s）；API 无心跳时新任务直接 503「分析队列未启动」，不会卡在排队中 |
+| 入队失败 | 删除 job 状态与 active key 后返回 503，避免用户重试被旧 active 记录挡住 |
+| 兼容 | 保留 `AI_JOB_EXECUTION=inline` 供本地调试；FastAPI lifespan 关闭 ARQ 连接池；worker 退出时释放 HTTP/DB/Redis 资源 |
+| 依赖 | `arq 0.28`（依赖 redis 5.3.x，已随 uv.lock 锁定） |
+
+**验收**
+- 真实启动 `uv run arq app.worker.WorkerSettings`：加载 `run_ai_job` 与 `worker_heartbeat` 两个函数，心跳 TTL 116s
+- 通过 `start_ai_job` 入队 600519：worker 消费并落状态 `succeeded（命中 6h 缓存）`，ARQ 日志 `j_complete=3 j_failed=0`
+- 后端 **88 passed**（新增心跳可见性、无 worker 拒绝、入队参数、inline 回退、worker 入口 5 个用例）
+- 文档与命令：`npm run worker`、`AI_JOB_EXECUTION` / `AI_WORKER_MAX_JOBS` 写入 `.env.example`
+
+**说明**：API 重启不再中断分析；worker 优雅重启会等待在跑任务结束。若 worker 硬崩溃，运行中任务仍由 stale 检测标记失败，用户重新发起即可。
+
 ---
 
 ## 五、未完成清单（按优先级）
@@ -461,18 +521,19 @@
 - ✅ 六分析师 + 首席决策：技术/基本面/资金面/风险/情绪/新闻六份结构化报告；LLM 决策 + 规则兜底；决策含操作建议/持有周期/仓位/风险（2026-10-21）
 - ✅ 报告历史：PostgreSQL `analysis_reports`、用户隔离、按股票列表/详情、详情页回看（2026-10-21）
 - ✅ 全部历史入口：顶栏用户菜单 + `/reports` 跨股票列表（日期分组/筛选），报告页可返回全部历史（2026-10-21）
-- ✅ 详情页 AI 分析卡：未配置提示、手动触发、轮询阶段/耗时、六分析师卡片、决策/价位/数据缺口/额度展示（2026-10-21）
+- ✅ 详情页 AI 分析卡：未配置提示、手动触发、SSE 实时阶段/耗时、六分析师卡片、决策/价位/数据缺口/额度展示（2026-10-21）
 - ✅ 价位代码计算：entry −2% / 止盈 +8% / 止损 ATR 钳制 −5%~−8%，`computed_by="code"`
 - ✅ 六位分析师逐位接 LLM：并发 3 路、单点失败回退规则稿、`engine` 标记、逐位进度（2026-10-21，见 4.22）
-- ⬜ 团队讨论时间线、SSE 流式、ARQ worker、批量/定时
+- ✅ 团队讨论时间线：LLM 圆桌 4-6 轮 + 规则兜底，讨论纪要进入首席决策（2026-10-21，见 4.23）
+- ✅ SSE 实时进度：`/ai/jobs/{job_id}/events`，snapshot → phase → done，前端断流回退轮询（2026-10-21，见 4.24）
+- ✅ ARQ worker：独立进程执行、心跳检测、入队失败回滚、inline 调试模式（2026-10-21，见 4.25）
+- ⬜ 批量/定时分析
 - ⬜ `llm/crypto.py`：AES-256-GCM 密钥加密，主密钥 `APP_ENCRYPTION_KEY` 走环境变量
-- ✅ 分析师与决策提示词均在代码中（`llm/analyst_prompts.py` + `llm/prompts.py`），`PROMPT_VERSION` 含双 digest；YAML 化暂不做
-- ⬜ ARQ worker（当前用进程内 asyncio task；服务重启会中断，已做 stale 检测；后续迁移 ARQ + 条件 UPDATE 抢占）
-- ⬜ SSE：Redis Pub/Sub 转发，事件 `job_status/agent_started/agent_token/agent_completed/discussion_*/decision_completed/done/error`，15s 心跳，断线按 `agent_runs` 回放
+- ✅ 分析师、讨论与决策提示词均在代码中（`llm/analyst_prompts.py`、`llm/discussion_prompts.py`、`llm/prompts.py`），`PROMPT_VERSION` 含三段 digest；YAML 化暂不做
 - 🟡 数据表：`analysis_reports` 已建；`analysis_jobs`、`agent_runs`、`llm_providers`、`app_settings`、`usage_daily` 待做
 
 ### 5.5 P5–P7
-- 🟡 分析报告页：独立 `/reports/:id` 已上线，完整展示六分析师/决策/价位/来源；6 维雷达、DiscussionTimeline、AgentStreamCard 待做
+- 🟡 分析报告页：独立 `/reports/:id` 已上线，完整展示六分析师/讨论时间线/决策/价位/来源；6 维雷达待做
 - ✅ 历史报告落库与按股票回看，当前 AI 卡与历史列表均可进入报告详情（2026-10-21）
 - ⬜ 历史对比：同股多次分析并排 diff
 - ⬜ PDF 导出
@@ -544,5 +605,5 @@ npm run build       # vue-tsc + vite build
 4. ✅ P2 收尾 A：`stocks` 表 + 全量 A 股种子 + 股票搜索接口（代码/名称/拼音）
 5. P2 收尾 B：新闻/公告结构化 Provider（财务/资金流已完成；AKShare 已由东财直连替代）
 6. P3：自选股 + klinecharts 指标（个股详情页 v1、技术诊断、名称/拼音搜索已完成）
-7. P4：团队讨论时间线 + SSE 流式 + ARQ（六分析师逐位 LLM 已完成）
+7. P4 收尾：批量/定时分析 + `llm/crypto.py` 密钥加密（ARQ、SSE、讨论、六分析师 LLM 已完成）
 8. P5：历史并排 diff + PDF 导出

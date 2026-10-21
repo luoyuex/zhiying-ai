@@ -1,4 +1,4 @@
-import { http } from './client'
+import { getAccessToken, http, refreshAccessToken } from './client'
 import type { PriceLevels } from './market'
 
 export type AIRating = '看多' | '偏多' | '中性' | '偏空' | '看空'
@@ -26,6 +26,19 @@ export interface AnalystReport {
   missing: string[]
   /** 该位分析师最终稿来自 LLM 还是规则引擎 */
   engine: 'llm' | 'rule'
+}
+
+export interface DiscussionTurn {
+  speaker: string
+  target: string
+  stance: '同意' | '补充' | '质疑'
+  content: string
+}
+
+export interface TeamDiscussion {
+  turns: DiscussionTurn[]
+  summary: string
+  source: 'llm' | 'rule'
 }
 
 export interface FinalDecision {
@@ -69,6 +82,7 @@ export interface AIAnalysisResponse {
   analysis: AIAnalysisPayload
   analysts: AnalystReport[]
   decision: FinalDecision | null
+  discussion: TeamDiscussion | null
   web_search_used: boolean
   web_sources: WebSource[]
   disclaimer: string
@@ -112,4 +126,90 @@ export const aiApi = {
   job(jobId: string) {
     return http.get<AIJobState>(`/ai/jobs/${encodeURIComponent(jobId)}`)
   },
+}
+
+export type AIJobEventType = 'snapshot' | 'phase' | 'done' | 'error'
+
+export interface AIJobEvent {
+  type: AIJobEventType
+  job: AIJobState | null
+  message?: string
+}
+
+function parseJobEvent(frame: string): AIJobEvent | null {
+  let event = 'message'
+  const data: string[] = []
+  for (const line of frame.split('\n')) {
+    if (line.startsWith('event:')) event = line.slice(6).trim()
+    else if (line.startsWith('data:')) data.push(line.slice(5).trim())
+  }
+  if (!data.length) return null
+
+  const raw = data.join('\n')
+  if (event === 'error') {
+    let message = ''
+    try {
+      message = String(JSON.parse(raw).message ?? '')
+    } catch {
+      message = ''
+    }
+    return { type: 'error', job: null, message }
+  }
+  if (event !== 'snapshot' && event !== 'phase' && event !== 'done') return null
+  return { type: event, job: JSON.parse(raw) as AIJobState }
+}
+
+async function openJobStream(jobId: string, signal: AbortSignal): Promise<Response> {
+  const url = `/api/v1/ai/jobs/${encodeURIComponent(jobId)}/events`
+  let token = getAccessToken()
+  if (!token) token = await refreshAccessToken()
+  if (!token) throw new Error('登录状态已失效')
+
+  let response = await fetch(url, {
+    headers: { Authorization: `Bearer ${token}`, Accept: 'text/event-stream' },
+    signal,
+  })
+  if (response.status === 401) {
+    const renewed = await refreshAccessToken()
+    if (renewed) {
+      response = await fetch(url, {
+        headers: { Authorization: `Bearer ${renewed}`, Accept: 'text/event-stream' },
+        signal,
+      })
+    }
+  }
+  if (!response.ok) throw new Error(`事件流连接失败（${response.status}）`)
+  return response
+}
+
+/** 读取 AI 任务 SSE；连接失败时由调用方回退到轮询。 */
+export async function streamJob(
+  jobId: string,
+  onEvent: (event: AIJobEvent) => void,
+  signal: AbortSignal,
+): Promise<void> {
+  const response = await openJobStream(jobId, signal)
+  if (!response.body) throw new Error('当前浏览器不支持流式响应')
+
+  const reader = response.body.getReader()
+  const decoder = new TextDecoder()
+  let buffer = ''
+  try {
+    while (true) {
+      const { done, value } = await reader.read()
+      if (done) break
+      buffer += decoder.decode(value, { stream: true })
+
+      let boundary = buffer.indexOf('\n\n')
+      while (boundary >= 0) {
+        const frame = buffer.slice(0, boundary)
+        buffer = buffer.slice(boundary + 2)
+        const event = parseJobEvent(frame)
+        if (event) onEvent(event)
+        boundary = buffer.indexOf('\n\n')
+      }
+    }
+  } finally {
+    reader.releaseLock()
+  }
 }

@@ -55,14 +55,17 @@ class FakeLLM:
         replies: list[dict | Exception],
         *,
         analyst_reply: dict | None = None,
+        discussion_reply: dict | None = None,
         fail_keys: tuple[str, ...] = (),
     ) -> None:
         self.replies = replies
         self.analyst_reply = analyst_reply
+        self.discussion_reply = discussion_reply
         self.fail_keys = set(fail_keys)
         self.calls = 0
         self.decision_calls = 0
         self.analyst_calls = 0
+        self.discussion_calls = 0
         self.prompts: list[str] = []
 
     async def generate_json(self, system_prompt: str, user_prompt: str) -> dict:
@@ -75,6 +78,12 @@ class FakeLLM:
             if isinstance(reply, Exception):
                 raise reply
             return reply
+
+        if "投资圆桌" in system_prompt:
+            self.discussion_calls += 1
+            if self.discussion_reply is None:
+                raise LLMResponseError("mock discussion failure")
+            return self.discussion_reply
 
         key = next(
             (value for marker, value in _ANALYST_MARKERS.items() if marker in system_prompt),
@@ -140,8 +149,8 @@ async def test_generate_caches_six_analysts_and_counts_quota():
     assert first.analysis.rating == "看多"
     assert second.cached is True
     assert second.quota_used == 1
-    # 六位分析师 + 一次首席决策；第二次命中缓存不再调用
-    assert llm.calls == 7
+    # 六位分析师 + 一次团队讨论 + 一次首席决策；第二次命中缓存不再调用
+    assert llm.calls == 8
     assert {item.engine for item in first.analysts} == {"rule"}
 
 
@@ -182,7 +191,7 @@ async def test_invalid_decision_falls_back_to_rule():
         llm_client=llm,
     )
 
-    assert llm.calls == 7
+    assert llm.calls == 8
     assert report.decision is not None
     assert report.decision.decision_source == "rule_fallback"
     assert report.quota_used == 1
@@ -411,4 +420,84 @@ async def test_progress_reports_analyst_completion():
 
     assert phases[0] == "六位分析师分析中 0/6"
     assert phases[1:7] == [f"六位分析师分析中 {done}/6" for done in range(1, 7)]
+    assert phases[-2] == "团队讨论中"
     assert phases[-1] == "首席策略官汇总六份报告"
+
+
+def discussion_reply() -> dict:
+    return {
+        "turns": [
+            {
+                "speaker": "技术面",
+                "target": "资金面",
+                "stance": "质疑",
+                "content": "技术面评分 68，但资金面数据缺失，结论应更谨慎。",
+            },
+            {
+                "speaker": "资金面",
+                "target": "技术面",
+                "stance": "补充",
+                "content": "资金流数据缺失，无法确认主力方向，本维度按中性处理。",
+            },
+            {
+                "speaker": "风险",
+                "target": "技术面",
+                "stance": "同意",
+                "content": "波动率可控，但需保留资金面缺口提示。",
+            },
+        ],
+        "summary": "分歧集中在资金面数据缺失，整体维持中性偏多。",
+    }
+
+
+async def test_llm_discussion_enters_report_and_decision():
+    redis = FakeRedis()
+    user, quote, technical, bars = make_analysis("600019")
+    llm = FakeLLM(
+        [decision_reply()],
+        analyst_reply=analyst_reply(),
+        discussion_reply=discussion_reply(),
+    )
+
+    report = await generate_ai_analysis(
+        redis,
+        user.id,
+        user.daily_analysis_quota,
+        quote,
+        technical,
+        bars,
+        llm_client=llm,
+    )
+
+    assert report.discussion is not None
+    assert report.discussion.source == "llm"
+    assert len(report.discussion.turns) == 3
+    assert report.discussion.turns[0].speaker == "技术面"
+    assert report.discussion.turns[0].target == "资金面"
+    assert report.discussion.summary.startswith("分歧集中在")
+    assert llm.discussion_calls == 1
+    assert llm.decision_calls == 1
+    # 讨论纪要进入首席决策输入
+    assert any('"discussion"' in prompt for prompt in llm.prompts)
+
+
+async def test_discussion_failure_falls_back_to_rule():
+    redis = FakeRedis()
+    user, quote, technical, bars = make_analysis("600020")
+    llm = FakeLLM([decision_reply()], analyst_reply=analyst_reply())
+
+    report = await generate_ai_analysis(
+        redis,
+        user.id,
+        user.daily_analysis_quota,
+        quote,
+        technical,
+        bars,
+        llm_client=llm,
+    )
+
+    assert report.discussion is not None
+    assert report.discussion.source == "rule"
+    assert len(report.discussion.turns) >= 2
+    assert report.discussion.turns[0].stance == "质疑"
+    assert report.decision is not None
