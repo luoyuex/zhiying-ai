@@ -79,3 +79,11 @@ class KlineSeries(BaseModel):
 class CachedPayload(BaseModel):
     payload: dict
     age_seconds: float
+
+
+class StockBasic(BaseModel):
+    """股票基础信息，用于建库与搜索，不含行情。"""
+
+    code: str
+    name: str
+    exchange: str

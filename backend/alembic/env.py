@@ -8,7 +8,7 @@ from sqlalchemy.ext.asyncio import async_engine_from_config
 
 from app.core.config import settings
 from app.db.base import Base
-from app.db.models import analysis_report, refresh_token, user  # noqa: F401  确保模型被注册
+from app.db.models import analysis_report, refresh_token, stock, user  # noqa: F401  确保模型被注册
 
 config = context.config
 config.set_main_option("sqlalchemy.url", settings.database_url)

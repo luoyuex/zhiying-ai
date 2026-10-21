@@ -14,8 +14,10 @@ from app.providers.models import Adjust, KlinePeriod, KlineSeries, Quote
 from app.providers.symbols import InvalidSymbolError
 from app.schemas.ai import AIJobState
 from app.schemas.analysis import TechnicalAnalysis
+from app.schemas.stock import StockSearchItem
 from app.services.ai_job_service import start_ai_job
 from app.services.market_service import MarketDataService
+from app.services.stock_directory_service import search_stocks as search_stock_directory
 from app.services.technical_analysis import InsufficientDataError, analyze_technicals
 
 logger = get_logger(__name__)
@@ -37,6 +39,15 @@ async def _technical_snapshot(symbol: str, service: MarketDataService):
     )
     technical = analyze_technicals(quote, kline.bars, kline.source)
     return quote, kline, technical
+
+
+@router.get("/search", response_model=list[StockSearchItem], summary="股票搜索")
+async def search_stocks(
+    q: str = Query(..., min_length=1, max_length=20, description="代码 / 名称 / 全拼 / 首字母"),
+    limit: int = Query(10, ge=1, le=20, description="返回条数"),
+    _: User = Depends(get_current_user),
+) -> list[StockSearchItem]:
+    return await search_stock_directory(q, limit=limit)
 
 
 @router.get("/{symbol}/quote", response_model=Quote, summary="实时报价")

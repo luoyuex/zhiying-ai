@@ -56,6 +56,14 @@ uv run uvicorn app.main:app --reload --port 8010
 
 后端地址 <http://127.0.0.1:8010>，接口文档 <http://127.0.0.1:8010/docs>，健康检查 `/health`。
 
+初始化股票库（全量 A 股代码 / 名称 / 拼音，约 5900 只，用于查询补全）：
+
+```bash
+uv run python -m app.scripts.seed_stocks
+```
+
+新股 / 退市后重跑同一命令即可增量刷新；根目录也可用 `npm run seed`。
+
 ### 4. 启动前端
 
 ```bash

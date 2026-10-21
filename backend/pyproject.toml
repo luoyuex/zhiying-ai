@@ -20,6 +20,7 @@ dependencies = [
     "tzdata>=2024.2",
     "openai>=1.58",
     "json-repair>=0.30",
+    "pypinyin>=0.55.0",
 ]
 
 [dependency-groups]

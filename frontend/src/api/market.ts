@@ -101,7 +101,17 @@ export interface TechnicalAnalysis {
   disclaimer: string
 }
 
+export interface StockSearchItem {
+  code: string
+  name: string
+  exchange: string
+}
+
 export const marketApi = {
+  searchStocks(q: string, limit = 8) {
+    return http.get<StockSearchItem[]>('/stocks/search', { params: { q, limit } })
+  },
+
   quote(symbol: string) {
     return http.get<Quote>(`/stocks/${encodeURIComponent(symbol)}/quote`)
   },
