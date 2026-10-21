@@ -16,11 +16,18 @@ const createdAt = ref('')
 const loading = ref(false)
 const error = ref('')
 
-type ReportOrigin = 'dashboard' | 'reports' | 'stock'
+type ReportOrigin = 'dashboard' | 'reports' | 'stock' | 'watchlist'
 
 const origin = computed<ReportOrigin>(() => {
   const value = String(route.query.from ?? '')
-  if (value === 'dashboard' || value === 'reports' || value === 'stock') return value
+  if (
+    value === 'dashboard' ||
+    value === 'reports' ||
+    value === 'stock' ||
+    value === 'watchlist'
+  ) {
+    return value
+  }
   return 'stock'
 })
 
@@ -31,6 +38,7 @@ const originSymbol = computed(
 const backLink = computed(() => {
   if (origin.value === 'dashboard') return { to: '/', label: '返回工作台' }
   if (origin.value === 'reports') return { to: '/reports', label: '返回全部历史报告' }
+  if (origin.value === 'watchlist') return { to: '/watchlist', label: '返回自选股' }
   if (originSymbol.value) {
     return {
       to: `/stock/${originSymbol.value}`,

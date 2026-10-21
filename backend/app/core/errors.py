@@ -26,6 +26,7 @@ class ErrorCode:
     LLM_INVALID_RESPONSE = "LLM_INVALID_RESPONSE"
     ANALYSIS_QUOTA_EXCEEDED = "ANALYSIS_QUOTA_EXCEEDED"
     AI_SERVICE_UNAVAILABLE = "AI_SERVICE_UNAVAILABLE"
+    WATCHLIST_FULL = "WATCHLIST_FULL"
 
 
 class AppError(Exception):
@@ -146,3 +147,7 @@ def analysis_quota_exceeded(limit: int, reset_seconds: int) -> AppError:
 
 def ai_service_unavailable(message: str) -> AppError:
     return AppError(ErrorCode.AI_SERVICE_UNAVAILABLE, message, 503)
+
+
+def watchlist_full(limit: int) -> AppError:
+    return AppError(ErrorCode.WATCHLIST_FULL, f"自选股最多 {limit} 只，请先移除部分股票", 409)

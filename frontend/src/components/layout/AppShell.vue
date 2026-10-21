@@ -11,6 +11,22 @@ const router = useRouter()
 const menuOpen = ref(false)
 const menuRoot = ref<HTMLElement | null>(null)
 
+interface NavItem {
+  label: string
+  to: string
+  active: (path: string) => boolean
+}
+
+const NAV_ITEMS: NavItem[] = [
+  { label: '工作台', to: '/', active: (path) => path === '/' },
+  { label: '自选股', to: '/watchlist', active: (path) => path.startsWith('/watchlist') },
+  { label: '历史报告', to: '/reports', active: (path) => path.startsWith('/reports') },
+]
+
+function isActive(item: NavItem): boolean {
+  return item.active(route.path)
+}
+
 const avatarText = computed(() => auth.user?.nickname?.trim().slice(0, 1) || '智')
 
 function closeMenu(): void {
@@ -54,20 +70,36 @@ watch(
 <template>
   <div class="min-h-screen bg-surface">
     <header class="sticky top-0 z-20 border-b border-line bg-canvas/85 backdrop-blur">
-      <div class="mx-auto flex h-14 max-w-[1280px] items-center justify-between px-4 sm:px-6">
-        <RouterLink to="/" class="flex items-center gap-3">
+      <div class="mx-auto flex h-14 max-w-[1280px] items-center gap-4 px-4 sm:px-6">
+        <RouterLink to="/" class="flex shrink-0 items-center gap-3">
           <div
             class="flex size-8 items-center justify-center rounded-md bg-primary text-sm font-semibold text-white"
           >
             智
           </div>
-          <div class="text-left leading-tight">
+          <div class="hidden text-left leading-tight sm:block">
             <div class="text-sm font-semibold text-ink">智赢 AI</div>
             <div class="text-[11px] text-ink-3">A 股 AI 分析工作台</div>
           </div>
         </RouterLink>
 
-        <div ref="menuRoot" class="relative">
+        <nav class="hidden flex-1 items-center justify-center gap-1 md:flex">
+          <RouterLink
+            v-for="item in NAV_ITEMS"
+            :key="item.to"
+            :to="item.to"
+            class="relative flex h-14 items-center px-3 text-[13px] transition-colors"
+            :class="isActive(item) ? 'font-medium text-ink' : 'text-ink-3 hover:text-ink'"
+          >
+            {{ item.label }}
+            <span
+              v-if="isActive(item)"
+              class="absolute inset-x-3 bottom-0 h-0.5 rounded-full bg-ink"
+            />
+          </RouterLink>
+        </nav>
+
+        <div ref="menuRoot" class="relative ml-auto shrink-0 md:ml-0">
           <button
             type="button"
             class="flex items-center gap-2 rounded-md p-1.5 transition-colors hover:bg-surface"
@@ -198,6 +230,24 @@ watch(
           </Transition>
         </div>
       </div>
+
+      <nav
+        class="flex h-10 items-center gap-5 overflow-x-auto border-t border-line px-4 md:hidden"
+      >
+        <RouterLink
+          v-for="item in NAV_ITEMS"
+          :key="item.to"
+          :to="item.to"
+          class="relative flex h-10 shrink-0 items-center text-[13px] transition-colors"
+          :class="isActive(item) ? 'font-medium text-ink' : 'text-ink-3 hover:text-ink'"
+        >
+          {{ item.label }}
+          <span
+            v-if="isActive(item)"
+            class="absolute inset-x-0 bottom-0 h-0.5 rounded-full bg-ink"
+          />
+        </RouterLink>
+      </nav>
     </header>
 
     <main class="mx-auto max-w-[1280px] px-4 py-6 sm:px-6 sm:py-8">

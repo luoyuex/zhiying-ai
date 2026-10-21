@@ -11,6 +11,7 @@ import {
 } from '@/api/ai'
 import { marketApi, type KlineSeries, type Quote, type TechnicalAnalysis } from '@/api/market'
 import { reportsApi, type ReportSummary } from '@/api/reports'
+import { watchlistApi } from '@/api/watchlist'
 import AppShell from '@/components/layout/AppShell.vue'
 import MiniKline from '@/components/market/MiniKline.vue'
 import DiscussionTimeline from '@/components/report/DiscussionTimeline.vue'
@@ -69,6 +70,8 @@ const aiElapsed = ref(0)
 const history = ref<ReportSummary[]>([])
 const historyLoading = ref(false)
 const historyError = ref('')
+const watchlisted = ref(false)
+const watchlistBusy = ref(false)
 let aiPollTimer: ReturnType<typeof setTimeout> | null = null
 let aiElapsedTimer: ReturnType<typeof setInterval> | null = null
 let aiStreamAbort: AbortController | null = null
@@ -256,6 +259,33 @@ async function loadHistory(value: string): Promise<void> {
     historyError.value = getErrorMessage(err, '历史报告加载失败')
   } finally {
     historyLoading.value = false
+  }
+}
+
+async function loadWatchlistState(value: string): Promise<void> {
+  try {
+    const { data } = await watchlistApi.status(value)
+    if (data.symbol === code.value) watchlisted.value = data.in_watchlist
+  } catch {
+    watchlisted.value = false
+  }
+}
+
+async function toggleWatchlist(): Promise<void> {
+  const value = code.value
+  if (watchlistBusy.value || !quote.value || !/^\d{6}$/.test(value)) return
+
+  watchlistBusy.value = true
+  const next = !watchlisted.value
+  watchlisted.value = next
+  try {
+    if (next) await watchlistApi.add(value)
+    else await watchlistApi.remove(value)
+  } catch (err) {
+    watchlisted.value = !next
+    error.value = getErrorMessage(err, next ? '加入自选失败' : '移出自选失败')
+  } finally {
+    watchlistBusy.value = false
   }
 }
 
@@ -493,6 +523,7 @@ async function loadAll(value: string): Promise<void> {
     analysisSeq += 1
     analysis.value = null
     history.value = []
+    watchlisted.value = false
     return
   }
   quoteSeq += 1
@@ -504,6 +535,8 @@ async function loadAll(value: string): Promise<void> {
   error.value = ''
   chartError.value = ''
   analysisError.value = ''
+  watchlisted.value = false
+  void loadWatchlistState(value)
   void loadHistory(value)
   await Promise.all([loadQuote(value), loadKline(value)])
   if (!error.value) void loadAnalysis(value)
@@ -574,18 +607,34 @@ onBeforeUnmount(() => {
         </p>
       </div>
 
-      <form class="flex w-full gap-2 sm:w-auto" @submit.prevent="submitSearch">
-        <Input
-          v-model="searchSymbol"
-          class="min-w-0 flex-1 sm:w-56 sm:flex-none"
-          placeholder="切换股票代码"
-          aria-label="股票代码"
-          inputmode="numeric"
-          autocomplete="off"
-          maxlength="6"
-        />
-        <Button type="submit" class="shrink-0">查询</Button>
-      </form>
+      <div class="flex w-full flex-wrap items-center gap-2 sm:w-auto">
+        <button
+          type="button"
+          class="inline-flex h-10 shrink-0 items-center gap-1.5 rounded-md border px-3 text-sm font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-50"
+          :class="
+            watchlisted
+              ? 'border-primary/30 bg-primary-soft text-primary'
+              : 'border-line-strong bg-canvas text-ink-2 hover:border-ink-3 hover:text-ink'
+          "
+          :disabled="watchlistBusy || !quote"
+          @click="toggleWatchlist"
+        >
+          {{ watchlisted ? '已自选' : '加入自选' }}
+        </button>
+
+        <form class="flex min-w-0 flex-1 gap-2 sm:flex-none" @submit.prevent="submitSearch">
+          <Input
+            v-model="searchSymbol"
+            class="min-w-0 flex-1 sm:w-56 sm:flex-none"
+            placeholder="切换股票代码"
+            aria-label="股票代码"
+            inputmode="numeric"
+            autocomplete="off"
+            maxlength="6"
+          />
+          <Button type="submit" class="shrink-0">查询</Button>
+        </form>
+      </div>
     </section>
 
     <div
@@ -691,29 +740,48 @@ onBeforeUnmount(() => {
               六维数据与分析师报告由代码生成，首席策略官由 LLM 汇总；价位由代码计算，数据缺口会明确标注。
             </p>
           </div>
-          <div v-if="aiConfig" class="text-right text-[11px] leading-relaxed text-ink-3">
-            <div>{{ aiConfig.model }}</div>
-            <div>今日额度 {{ aiConfig.quota_used }} / {{ aiConfig.daily_quota }}</div>
-            <RouterLink
-              v-if="aiReport?.report_id"
-              :to="{
-                path: `/reports/${aiReport.report_id}`,
-                query: { from: 'stock', symbol: code },
-              }"
-              class="mt-1 inline-flex font-medium text-primary hover:text-primary-hover"
-            >
-              查看完整报告 →
-            </RouterLink>
-            <button
-              v-if="aiReport"
-              type="button"
-              class="mt-1 inline-flex font-medium text-ink-3 transition-colors hover:text-ink disabled:cursor-not-allowed disabled:opacity-50"
-              :disabled="aiLoading || !aiConfig?.configured"
-              title="跳过 6 小时缓存重新生成，消耗 1 次额度"
-              @click="rerunAIAnalysis"
-            >
-              {{ aiLoading ? '重新诊断中…' : '重新 AI 诊断' }}
-            </button>
+          <div
+            v-if="aiConfig"
+            class="flex shrink-0 flex-col items-end gap-1.5 text-right text-[11px] leading-relaxed text-ink-3"
+          >
+            <div>{{ aiConfig.model }} · 今日额度 {{ aiConfig.quota_used }} / {{ aiConfig.daily_quota }}</div>
+            <div class="flex flex-wrap items-center justify-end gap-2">
+              <RouterLink
+                v-if="aiReport?.report_id"
+                :to="{
+                  path: `/reports/${aiReport.report_id}`,
+                  query: { from: 'stock', symbol: code },
+                }"
+                class="font-medium text-primary transition-colors hover:text-primary-hover"
+              >
+                查看完整报告 →
+              </RouterLink>
+              <button
+                v-if="aiReport"
+                type="button"
+                class="inline-flex h-7 items-center gap-1 rounded-md border border-line-strong bg-canvas px-2.5 text-xs font-medium text-ink-2 transition-colors hover:border-ink-3 hover:text-ink disabled:cursor-not-allowed disabled:opacity-50"
+                :disabled="aiLoading || !aiConfig?.configured"
+                title="跳过 6 小时缓存重新生成，消耗 1 次额度"
+                @click="rerunAIAnalysis"
+              >
+                <svg
+                  class="size-3.5"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="1.8"
+                  aria-hidden="true"
+                >
+                  <path d="M4 4v5h5" stroke-linecap="round" stroke-linejoin="round" />
+                  <path
+                    d="M4.6 9A8 8 0 1 1 4 13"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                  />
+                </svg>
+                {{ aiLoading ? '诊断中…' : '重新诊断' }}
+              </button>
+            </div>
           </div>
         </div>
 

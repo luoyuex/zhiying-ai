@@ -109,12 +109,20 @@ onMounted(() => {
         <p class="text-[13px] text-ink-3">{{ greeting }}，{{ auth.user?.nickname }}</p>
         <h1 class="mt-1 text-[24px] font-semibold tracking-tight text-ink">工作台</h1>
       </div>
-      <RouterLink
-        to="/reports"
-        class="text-xs text-ink-3 transition-colors hover:text-ink"
-      >
-        全部历史报告 →
-      </RouterLink>
+      <div class="flex items-center gap-4">
+        <RouterLink
+          to="/watchlist"
+          class="text-xs text-ink-3 transition-colors hover:text-ink"
+        >
+          自选股 →
+        </RouterLink>
+        <RouterLink
+          to="/reports"
+          class="text-xs text-ink-3 transition-colors hover:text-ink"
+        >
+          全部历史报告 →
+        </RouterLink>
+      </div>
     </section>
 
     <StockLookup class="mt-6" />
