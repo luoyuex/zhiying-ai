@@ -1,0 +1,49 @@
+/* 设计 token —— 浅色清爽数据风
+   命名约定：bg-canvas / bg-surface / text-ink / border-line / text-primary ...
+   注意：涨红跌绿，符合 A 股习惯。 */
+
+@theme {
+  /* 背景与表面 */
+  --color-canvas: #ffffff;
+  --color-surface: #f7f8fa;
+  --color-surface-2: #f1f3f5;
+
+  /* 边框 */
+  --color-line: #e6e8eb;
+  --color-line-strong: #d5d9de;
+
+  /* 文字 */
+  --color-ink: #16181d;
+  --color-ink-2: #5a6069;
+  --color-ink-3: #8a9099;
+
+  /* 主色 */
+  --color-primary: #2f5af3;
+  --color-primary-hover: #2447cc;
+  --color-primary-soft: #edf1fe;
+
+  /* 涨跌与状态 */
+  --color-up: #e0424a;
+  --color-up-soft: #fdecec;
+  --color-down: #1ba672;
+  --color-down-soft: #e8f7f1;
+  --color-flat: #8a9099;
+  --color-warn: #c08a2e;
+  --color-warn-soft: #fbf4e6;
+  --color-danger: #d93b43;
+  --color-danger-soft: #fdecec;
+
+  /* 圆角 */
+  --radius-sm: 6px;
+  --radius-md: 10px;
+  --radius-lg: 14px;
+
+  /* 阴影：默认极轻，靠边框分层 */
+  --shadow-card: 0 1px 2px rgba(16, 24, 40, 0.04), 0 1px 3px rgba(16, 24, 40, 0.06);
+  --shadow-pop: 0 8px 24px rgba(16, 24, 40, 0.08), 0 2px 6px rgba(16, 24, 40, 0.04);
+
+  /* 字体 */
+  --font-sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Hiragino Sans GB',
+    'Microsoft YaHei', 'Helvetica Neue', Arial, sans-serif;
+  --font-mono: 'SF Mono', ui-monospace, 'Cascadia Mono', Menlo, Consolas, monospace;
+}

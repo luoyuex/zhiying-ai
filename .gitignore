@@ -1,0 +1,38 @@
+# env
+.env
+.env.local
+*.local
+
+# python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.pytest_cache/
+.ruff_cache/
+*.egg-info/
+dist/
+build/
+
+# node
+node_modules/
+frontend/dist/
+frontend/.vite/
+*.tsbuildinfo
+
+# ide / os
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# logs
+*.log
+logs/
+
+# data
+pgdata/
+redisdata/
+
+# 本地 Agent 记忆（不入库）
+.workbuddy-ai/
