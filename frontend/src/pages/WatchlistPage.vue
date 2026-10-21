@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 
 import { aiApi, type AIJobState } from '@/api/ai'
 import {
@@ -9,11 +9,15 @@ import {
 } from '@/api/watchlist'
 import AppShell from '@/components/layout/AppShell.vue'
 import WatchlistCard from '@/components/watchlist/WatchlistCard.vue'
+import { useAuthStore } from '@/stores/auth'
 import { getErrorMessage } from '@/utils/errors'
 
 const POLL_INTERVAL = 2500
 const POLL_MAX_FAILURES = 5
 const MAX_BATCH = 20
+const PENDING_STORAGE_PREFIX = 'zhiying:watchlist-pending:'
+
+const auth = useAuthStore()
 
 const watchlist = ref<WatchlistEntry[]>([])
 const loading = ref(true)
@@ -34,6 +38,51 @@ const allSelected = computed(
   () => count.value > 0 && count.value <= MAX_BATCH && selectedCount.value === count.value,
 )
 const pendingCount = computed(() => Object.keys(pendingJobs.value).length)
+const pendingStorageKey = computed(
+  () => `${PENDING_STORAGE_PREFIX}${auth.user?.id ?? 'anonymous'}`,
+)
+
+// 把排队中的任务写入 sessionStorage，刷新页面后可重新接上进度
+watch(
+  pendingJobs,
+  (value) => {
+    try {
+      if (Object.keys(value).length) {
+        sessionStorage.setItem(pendingStorageKey.value, JSON.stringify(value))
+      } else {
+        sessionStorage.removeItem(pendingStorageKey.value)
+      }
+    } catch {
+      // 隐私模式等场景下 sessionStorage 不可用，忽略即可
+    }
+  },
+  { deep: true },
+)
+
+function restorePendingJobs(): void {
+  try {
+    const raw = sessionStorage.getItem(pendingStorageKey.value)
+    if (!raw) return
+    const saved = JSON.parse(raw) as Record<string, unknown>
+    const entries = Object.entries(saved).filter(
+      ([symbol, jobId]) =>
+        typeof jobId === 'string' &&
+        jobId.length > 0 &&
+        watchlist.value.some((item) => item.symbol === symbol),
+    )
+    if (!entries.length) {
+      sessionStorage.removeItem(pendingStorageKey.value)
+      return
+    }
+    for (const [symbol, jobId] of entries) {
+      pendingJobs.value[symbol] = jobId as string
+      jobStates.value[symbol] = { status: 'queued' }
+    }
+    schedulePoll(0)
+  } catch {
+    // 存储内容损坏时直接忽略，不阻塞页面
+  }
+}
 
 async function load(silent = false): Promise<void> {
   if (!silent) {
@@ -63,6 +112,9 @@ async function remove(symbol: string): Promise<void> {
   // 立即从列表移除，不重新拉取
   watchlist.value = watchlist.value.filter((item) => item.symbol !== symbol)
   selectedSymbols.value = selectedSymbols.value.filter((item) => item !== symbol)
+  delete pendingJobs.value[symbol]
+  delete jobStates.value[symbol]
+  delete pollFailures[symbol]
   try {
     await watchlistApi.remove(symbol)
   } catch (err) {
@@ -197,8 +249,10 @@ async function submitBatch(): Promise<void> {
   }
 }
 
-onMounted(() => {
-  void load()
+onMounted(async () => {
+  await load()
+  // 列表加载失败时保留存储，等下次刷新再恢复
+  if (!error.value) restorePendingJobs()
 })
 
 onBeforeUnmount(() => {

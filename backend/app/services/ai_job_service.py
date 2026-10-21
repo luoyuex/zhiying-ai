@@ -199,7 +199,7 @@ async def start_ai_job(
     if not is_llm_configured():
         raise LLMNotConfiguredError("尚未配置 LLM")
 
-    parse_symbol(symbol)
+    symbol = parse_symbol(symbol).code
 
     active_job_id = await redis.get(_active_key(user_id, symbol))
     if active_job_id:
@@ -254,6 +254,22 @@ async def start_ai_job(
     _TASKS.add(task)
     task.add_done_callback(_TASKS.discard)
     return state
+
+
+async def get_active_job(
+    redis: Redis,
+    user_id: object,
+    raw_symbol: str,
+) -> AIJobState | None:
+    """返回该股票当前仍在运行的任务；没有活跃任务时返回 None。"""
+    symbol = parse_symbol(raw_symbol).code
+    job_id = await redis.get(_active_key(user_id, symbol))
+    if not job_id:
+        return None
+    try:
+        return await get_ai_job(redis, user_id, job_id)
+    except (AIJobNotFoundError, AIJobForbiddenError):
+        return None
 
 
 async def run_ai_job_task(

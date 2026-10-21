@@ -323,11 +323,7 @@ async function submitAIAnalysis(force: boolean): Promise<void> {
   }
   aiPhase.value = force ? '提交重新诊断' : '提交任务'
   aiElapsed.value = 0
-  if (aiElapsedTimer === null) {
-    aiElapsedTimer = setInterval(() => {
-      if (aiLoading.value) aiElapsed.value += 1
-    }, 1000)
-  }
+  startAIElapsedTimer()
 
   try {
     const { data } = await aiApi.startAnalysis(code.value, force)
@@ -342,6 +338,34 @@ async function submitAIAnalysis(force: boolean): Promise<void> {
     if (getErrorCode(err) === 'LLM_NOT_CONFIGURED') {
       void loadAIConfig()
     }
+  }
+}
+
+function startAIElapsedTimer(): void {
+  if (aiElapsedTimer === null) {
+    aiElapsedTimer = setInterval(() => {
+      if (aiLoading.value) aiElapsed.value += 1
+    }, 1000)
+  }
+}
+
+/** 进入详情页时接上该股票正在运行的分析（例如自选股批量分析发起的任务） */
+async function resumeActiveAIJob(value: string): Promise<void> {
+  const seq = aiRequestSeq
+  try {
+    const { data } = await aiApi.activeJob(value)
+    if (!data || seq !== aiRequestSeq || value !== code.value) return
+    // 用户已经手动发起任务时不覆盖当前状态
+    if (aiLoading.value || aiJobId.value) return
+    aiLoading.value = true
+    aiError.value = ''
+    aiJobId.value = data.job_id
+    aiPhase.value = data.phase || '排队中'
+    aiElapsed.value = data.elapsed_seconds
+    startAIElapsedTimer()
+    if (!applyAIJob(data)) void openAIStream(data.job_id, seq)
+  } catch {
+    // 没有活跃任务或接口暂不可用时保持空闲状态
   }
 }
 
@@ -538,6 +562,7 @@ async function loadAll(value: string): Promise<void> {
   watchlisted.value = false
   void loadWatchlistState(value)
   void loadHistory(value)
+  void resumeActiveAIJob(value)
   await Promise.all([loadQuote(value), loadKline(value)])
   if (!error.value) void loadAnalysis(value)
 }

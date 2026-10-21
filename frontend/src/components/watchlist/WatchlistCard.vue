@@ -72,8 +72,8 @@ function cancelEdit(): void {
 
 async function saveEdit(): Promise<void> {
   if (saving.value) return
-  const cost = costInput.value.trim()
-  const quantity = quantityInput.value.trim()
+  const cost = String(costInput.value).trim()
+  const quantity = String(quantityInput.value).trim()
 
   const costPrice = cost === '' ? null : Number(cost)
   if (costPrice !== null && (!Number.isFinite(costPrice) || costPrice < 0)) {

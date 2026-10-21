@@ -1,6 +1,6 @@
 """AI 配置状态与任务接口。"""
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Query
 from fastapi.responses import StreamingResponse
 from redis.asyncio import Redis
 
@@ -11,11 +11,13 @@ from app.db.models.user import User
 from app.db.redis import get_redis
 from app.llm.client import is_llm_configured
 from app.llm.prompts import PROMPT_VERSION
+from app.providers.symbols import InvalidSymbolError
 from app.schemas.ai import AIConfigResponse, AIJobState
 from app.services.ai_analysis_service import read_quota_used
 from app.services.ai_job_service import (
     AIJobForbiddenError,
     AIJobNotFoundError,
+    get_active_job,
     get_ai_job,
 )
 from app.services.ai_job_stream import stream_job_events
@@ -36,6 +38,22 @@ async def get_ai_config(
         daily_quota=settings.effective_daily_quota(user.daily_analysis_quota),
         quota_used=quota_used,
     )
+
+
+@router.get(
+    "/jobs/active",
+    response_model=AIJobState | None,
+    summary="查询股票当前活跃分析任务",
+)
+async def get_active(
+    symbol: str = Query(..., min_length=1, max_length=12, description="股票代码"),
+    user: User = Depends(get_current_user),
+    redis: Redis = Depends(get_redis),
+) -> AIJobState | None:
+    try:
+        return await get_active_job(redis, user.id, symbol)
+    except InvalidSymbolError as exc:
+        raise errors.invalid_symbol(str(exc)) from exc
 
 
 @router.get("/jobs/{job_id}", response_model=AIJobState, summary="查询 AI 分析任务")

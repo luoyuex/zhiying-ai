@@ -72,6 +72,20 @@ async def test_job_not_found(client: AsyncClient):
     assert response.json()["code"] == "NOT_FOUND"
 
 
+async def test_active_job_none(client: AsyncClient):
+    response = await client.get("/api/v1/ai/jobs/active", params={"symbol": "600519"})
+
+    assert response.status_code == 200
+    assert response.json() is None
+
+
+async def test_active_job_rejects_invalid_symbol(client: AsyncClient):
+    response = await client.get("/api/v1/ai/jobs/active", params={"symbol": "ABC"})
+
+    assert response.status_code == 422
+    assert response.json()["code"] == "INVALID_SYMBOL"
+
+
 async def test_ai_config_requires_login():
     app.dependency_overrides.clear()
     transport = ASGITransport(app=app)

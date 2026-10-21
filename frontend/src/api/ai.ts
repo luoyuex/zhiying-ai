@@ -127,6 +127,13 @@ export const aiApi = {
   job(jobId: string) {
     return http.get<AIJobState>(`/ai/jobs/${encodeURIComponent(jobId)}`)
   },
+
+  /** 查询该股票当前仍在运行的任务；没有则返回 null */
+  activeJob(symbol: string) {
+    return http.get<AIJobState | null>('/ai/jobs/active', {
+      params: { symbol },
+    })
+  },
 }
 
 export type AIJobEventType = 'snapshot' | 'phase' | 'done' | 'error'

@@ -11,6 +11,7 @@ from app.services import ai_job_service
 from app.services.ai_job_service import (
     WORKER_HEARTBEAT_KEY,
     AIWorkerUnavailableError,
+    get_active_job,
     start_ai_job,
     worker_alive,
 )
@@ -76,6 +77,37 @@ async def test_start_enqueues_arq_job(monkeypatch):
         for job_id in (state.job_id if "state" in locals() else "",):
             if job_id:
                 await redis.delete(f"ai:job:{job_id}")
+        await redis.delete(f"ai:active:{user_id}:600519")
+
+
+async def test_active_job_lookup(monkeypatch):
+    redis = get_redis()
+    user_id = uuid.uuid4()
+    monkeypatch.setattr(settings, "ai_job_execution", "arq")
+    monkeypatch.setattr(ai_job_service, "is_llm_configured", lambda: True)
+
+    async def alive(_: object) -> bool:
+        return True
+
+    async def fake_pool() -> FakePool:
+        return FakePool()
+
+    monkeypatch.setattr(ai_job_service, "worker_alive", alive)
+    monkeypatch.setattr(ai_job_service, "_get_arq_pool", fake_pool)
+
+    state = None
+    try:
+        state = await start_ai_job(redis, user_id, 5, "sh600519")
+        active = await get_active_job(redis, user_id, "600519")
+        assert active is not None
+        assert active.job_id == state.job_id
+        assert await get_active_job(redis, user_id, "000001") is None
+
+        await redis.delete(f"ai:active:{user_id}:600519")
+        assert await get_active_job(redis, user_id, "600519") is None
+    finally:
+        if state is not None:
+            await redis.delete(f"ai:job:{state.job_id}")
         await redis.delete(f"ai:active:{user_id}:600519")
 
 
