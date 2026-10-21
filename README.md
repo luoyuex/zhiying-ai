@@ -137,6 +137,8 @@ LLM_CACHE_SECONDS=21600
 ```
 
 > `LLM_TIMEOUT_SECONDS` 是单次调用超时；`LLM_ANALYST_TIMEOUT_SECONDS` 是每位分析师的超时；`LLM_JOB_TIMEOUT_SECONDS` 是整个后台任务超时。六位分析师按 `LLM_ANALYST_CONCURRENCY` 并发，免费/低配模型建议保持 3。推理型模型思考也消耗 token，`LLM_MAX_TOKENS` 不要低于 4096。
+>
+> 开发期不想被额度挡住：在 `.env` 设 `AI_DAILY_QUOTA_OVERRIDE=9999`，所有用户统一按该额度计算；设为 `0` 则恢复使用用户表的 `daily_analysis_quota`。改完需重启后端。
 
 改完重启后端。未配置时详情页会显示引导，不会发起 LLM 请求；配置后：
 - `GET /api/v1/ai/config` 返回 `configured=true` 与当前模型

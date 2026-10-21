@@ -4,6 +4,7 @@ from fastapi import APIRouter, Depends, Query
 from redis.asyncio import Redis
 
 from app.core import errors
+from app.core.config import settings
 from app.core.deps import get_current_user
 from app.core.logging import get_logger
 from app.db.models.user import User
@@ -117,6 +118,7 @@ async def get_analysis(
 )
 async def create_ai_analysis(
     symbol: str,
+    force: bool = Query(False, description="跳过 6 小时缓存，重新生成"),
     user: User = Depends(get_current_user),
     redis: Redis = Depends(get_redis),
 ) -> AIJobState:
@@ -127,8 +129,9 @@ async def create_ai_analysis(
         return await start_ai_job(
             redis,
             user.id,
-            user.daily_analysis_quota,
+            settings.effective_daily_quota(user.daily_analysis_quota),
             symbol,
+            force,
         )
     except InvalidSymbolError as exc:
         raise errors.invalid_symbol(str(exc)) from exc

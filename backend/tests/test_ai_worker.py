@@ -70,7 +70,7 @@ async def test_start_enqueues_arq_job(monkeypatch):
         assert len(pool.calls) == 1
 
         args, kwargs = pool.calls[0]
-        assert args == ("run_ai_job", state.job_id, str(user_id), 5, "600519")
+        assert args == ("run_ai_job", state.job_id, str(user_id), 5, "600519", False)
         assert kwargs["_job_id"] == state.job_id
     finally:
         for job_id in (state.job_id if "state" in locals() else "",):
@@ -102,18 +102,19 @@ async def test_inline_execution_runs_task(monkeypatch):
 async def test_worker_entry_delegates(monkeypatch):
     captured: dict = {}
 
-    async def fake_run(redis, job_id, user_id, daily_quota, symbol):
+    async def fake_run(redis, job_id, user_id, daily_quota, symbol, force=False):
         captured.update(
             redis=redis,
             job_id=job_id,
             user_id=user_id,
             daily_quota=daily_quota,
             symbol=symbol,
+            force=force,
         )
 
     monkeypatch.setattr("app.worker.run_ai_job_task", fake_run)
 
-    await run_ai_job({"redis": "fake-redis"}, "job-1", "user-1", 5, "600519")
+    await run_ai_job({"redis": "fake-redis"}, "job-1", "user-1", 5, "600519", True)
 
     assert captured == {
         "redis": "fake-redis",
@@ -121,4 +122,5 @@ async def test_worker_entry_delegates(monkeypatch):
         "user_id": "user-1",
         "daily_quota": 5,
         "symbol": "600519",
+        "force": True,
     }

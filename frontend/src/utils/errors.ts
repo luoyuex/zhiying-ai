@@ -18,6 +18,10 @@ export function getErrorCode(error: unknown): string | undefined {
   return undefined
 }
 
+export function getErrorStatus(error: unknown): number | undefined {
+  return axios.isAxiosError(error) ? error.response?.status : undefined
+}
+
 export function getRetryAfter(error: unknown): number | undefined {
   if (axios.isAxiosError(error)) {
     const data = error.response?.data as { detail?: { retry_after?: number } } | undefined

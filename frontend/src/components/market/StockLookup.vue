@@ -5,6 +5,7 @@ import { useRouter } from 'vue-router'
 import { marketApi, type StockSearchItem } from '@/api/market'
 import Button from '@/components/ui/Button.vue'
 import Input from '@/components/ui/Input.vue'
+import { getErrorMessage, getErrorStatus } from '@/utils/errors'
 
 const HOT_STOCKS = [
   { code: '600519', name: '贵州茅台' },
@@ -19,6 +20,7 @@ const DEBOUNCE_MS = 250
 const router = useRouter()
 const keyword = ref('')
 const error = ref('')
+const searchError = ref('')
 const suggestions = ref<StockSearchItem[]>([])
 const open = ref(false)
 const searching = ref(false)
@@ -50,13 +52,19 @@ async function runSearch(text: string): Promise<void> {
   try {
     const { data } = await marketApi.searchStocks(text)
     if (seq !== requestSeq) return
+    searchError.value = ''
     suggestions.value = data
     activeIndex.value = data.length ? 0 : -1
     open.value = true
-  } catch {
+  } catch (err) {
     if (seq !== requestSeq) return
     suggestions.value = []
-    open.value = false
+    activeIndex.value = -1
+    open.value = true
+    searchError.value =
+      getErrorStatus(err) === 404
+        ? '搜索接口未就绪，请重启后端后重试'
+        : getErrorMessage(err, '股票搜索失败，请稍后重试')
   } finally {
     if (seq === requestSeq) searching.value = false
   }
@@ -65,6 +73,7 @@ async function runSearch(text: string): Promise<void> {
 watch(keyword, (value) => {
   window.clearTimeout(debounceTimer)
   error.value = ''
+  searchError.value = ''
   const text = value.trim()
   if (!text) {
     requestSeq += 1
@@ -80,6 +89,10 @@ function submit(): void {
   const text = keyword.value.trim()
   if (/^\d{6}$/.test(text)) {
     openStock(text)
+    return
+  }
+  if (searchError.value) {
+    error.value = searchError.value
     return
   }
   if (searching.value) {
@@ -177,7 +190,11 @@ onBeforeUnmount(() => {
           role="listbox"
           aria-label="股票搜索建议"
         >
-          <div v-if="searching" class="px-3 py-2.5 text-xs text-ink-3">搜索中…</div>
+          <div v-if="searchError" class="px-3 py-2.5 text-xs text-danger">
+            {{ searchError }}
+          </div>
+
+          <div v-else-if="searching" class="px-3 py-2.5 text-xs text-ink-3">搜索中…</div>
 
           <div v-else-if="!suggestions.length" class="px-3 py-2.5 text-xs text-ink-3">
             没有匹配的股票

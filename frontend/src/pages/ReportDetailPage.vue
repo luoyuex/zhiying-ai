@@ -16,6 +16,30 @@ const createdAt = ref('')
 const loading = ref(false)
 const error = ref('')
 
+type ReportOrigin = 'dashboard' | 'reports' | 'stock'
+
+const origin = computed<ReportOrigin>(() => {
+  const value = String(route.query.from ?? '')
+  if (value === 'dashboard' || value === 'reports' || value === 'stock') return value
+  return 'stock'
+})
+
+const originSymbol = computed(
+  () => String(route.query.symbol ?? '') || report.value?.symbol || '',
+)
+
+const backLink = computed(() => {
+  if (origin.value === 'dashboard') return { to: '/', label: '返回工作台' }
+  if (origin.value === 'reports') return { to: '/reports', label: '返回全部历史报告' }
+  if (originSymbol.value) {
+    return {
+      to: `/stock/${originSymbol.value}`,
+      label: report.value ? `返回 ${report.value.name} 行情` : '返回个股行情',
+    }
+  }
+  return { to: '/', label: '返回工作台' }
+})
+
 const decision = computed(() => report.value?.decision ?? null)
 const priceTone = computed(() => {
   const value = report.value?.change_pct
@@ -119,22 +143,19 @@ watch(
   <AppShell>
     <div class="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-ink-3">
       <RouterLink
-        v-if="report"
-        :to="`/stock/${report.symbol}`"
+        :to="backLink.to"
         class="inline-flex items-center gap-1 transition-colors hover:text-ink"
       >
         <span aria-hidden="true">←</span>
-        返回 {{ report.name }} 行情
+        {{ backLink.label }}
       </RouterLink>
       <RouterLink
-        v-else
-        to="/"
-        class="inline-flex items-center gap-1 transition-colors hover:text-ink"
+        v-if="origin !== 'reports'"
+        to="/reports"
+        class="transition-colors hover:text-ink"
       >
-        <span aria-hidden="true">←</span>
-        返回工作台
+        全部历史报告
       </RouterLink>
-      <RouterLink to="/reports" class="transition-colors hover:text-ink">全部历史报告</RouterLink>
     </div>
 
     <div v-if="loading" class="mt-6 animate-pulse rounded-lg border border-line bg-canvas p-5">

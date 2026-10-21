@@ -116,10 +116,11 @@ export const aiApi = {
     return http.get<AIConfig>('/ai/config')
   },
 
-  startAnalysis(symbol: string) {
+  startAnalysis(symbol: string, force = false) {
     return http.post<AIJobState>(
       `/stocks/${encodeURIComponent(symbol)}/ai-analysis`,
       null,
+      { params: force ? { force: true } : undefined },
     )
   },
 

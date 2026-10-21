@@ -398,6 +398,39 @@ def test_analyst_prompt_serializes_dates():
     assert "2026-09-30" in prompt
 
 
+async def test_force_regenerates_ignoring_cache():
+    redis = FakeRedis()
+    user, quote, technical, bars = make_analysis("600021")
+    llm = FakeLLM([decision_reply()], analyst_reply=analyst_reply())
+
+    first = await generate_ai_analysis(
+        redis,
+        user.id,
+        user.daily_analysis_quota,
+        quote,
+        technical,
+        bars,
+        llm_client=llm,
+    )
+    calls_after_first = llm.calls
+
+    second = await generate_ai_analysis(
+        redis,
+        user.id,
+        user.daily_analysis_quota,
+        quote,
+        technical,
+        bars,
+        llm_client=llm,
+        force=True,
+    )
+
+    assert first.cached is False
+    assert second.cached is False
+    assert llm.calls == calls_after_first + 8
+    assert second.quota_used == first.quota_used + 1
+
+
 async def test_progress_reports_analyst_completion():
     redis = FakeRedis()
     user, quote, technical, bars = make_analysis("600018")

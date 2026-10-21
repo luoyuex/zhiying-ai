@@ -81,6 +81,12 @@ class Settings(BaseSettings):
     ai_worker_max_jobs: int = 2
     ai_worker_heartbeat_ttl_seconds: int = 120
 
+    # 开发期额度覆盖：>0 时所有用户统一按该值计算，0 表示使用用户表里的额度
+    ai_daily_quota_override: int = 0
+
+    def effective_daily_quota(self, user_quota: int) -> int:
+        return self.ai_daily_quota_override or user_quota
+
     @property
     def llm_configured(self) -> bool:
         return bool(self.llm_base_url and self.llm_api_key and self.llm_model)

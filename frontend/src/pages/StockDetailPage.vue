@@ -273,14 +273,25 @@ async function loadAIConfig(): Promise<void> {
 }
 
 async function runAIAnalysis(): Promise<void> {
+  await submitAIAnalysis(false)
+}
+
+async function rerunAIAnalysis(): Promise<void> {
+  await submitAIAnalysis(true)
+}
+
+async function submitAIAnalysis(force: boolean): Promise<void> {
   if (aiLoading.value || !aiConfig.value?.configured || !quote.value) return
   stopAIPolling()
   const seq = ++aiRequestSeq
   aiLoading.value = true
   aiError.value = ''
-  aiReport.value = null
-  aiJobId.value = null
-  aiPhase.value = '提交任务'
+  if (!force) {
+    // 首次分析清空旧结果；重新诊断时保留当前报告，直到新结果返回
+    aiReport.value = null
+    aiJobId.value = null
+  }
+  aiPhase.value = force ? '提交重新诊断' : '提交任务'
   aiElapsed.value = 0
   if (aiElapsedTimer === null) {
     aiElapsedTimer = setInterval(() => {
@@ -289,7 +300,7 @@ async function runAIAnalysis(): Promise<void> {
   }
 
   try {
-    const { data } = await aiApi.startAnalysis(code.value)
+    const { data } = await aiApi.startAnalysis(code.value, force)
     if (seq !== aiRequestSeq) return
     aiJobId.value = data.job_id
     if (applyAIJob(data)) return
@@ -685,11 +696,24 @@ onBeforeUnmount(() => {
             <div>今日额度 {{ aiConfig.quota_used }} / {{ aiConfig.daily_quota }}</div>
             <RouterLink
               v-if="aiReport?.report_id"
-              :to="`/reports/${aiReport.report_id}`"
+              :to="{
+                path: `/reports/${aiReport.report_id}`,
+                query: { from: 'stock', symbol: code },
+              }"
               class="mt-1 inline-flex font-medium text-primary hover:text-primary-hover"
             >
               查看完整报告 →
             </RouterLink>
+            <button
+              v-if="aiReport"
+              type="button"
+              class="mt-1 inline-flex font-medium text-ink-3 transition-colors hover:text-ink disabled:cursor-not-allowed disabled:opacity-50"
+              :disabled="aiLoading || !aiConfig?.configured"
+              title="跳过 6 小时缓存重新生成，消耗 1 次额度"
+              @click="rerunAIAnalysis"
+            >
+              {{ aiLoading ? '重新诊断中…' : '重新 AI 诊断' }}
+            </button>
           </div>
         </div>
 
@@ -1003,7 +1027,7 @@ onBeforeUnmount(() => {
           <RouterLink
             v-for="item in history"
             :key="item.id"
-            :to="`/reports/${item.id}`"
+            :to="{ path: `/reports/${item.id}`, query: { from: 'stock', symbol: code } }"
             class="rounded-md border border-line bg-surface/40 px-3 py-2 text-left transition-colors hover:border-line-strong hover:bg-surface"
           >
             <div class="text-[11px] text-ink-3">{{ formatReportTime(item.created_at) }}</div>

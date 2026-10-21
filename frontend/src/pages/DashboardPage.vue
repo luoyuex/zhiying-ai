@@ -177,6 +177,7 @@ onMounted(() => {
             :key="item.id"
             :item="item"
             time-style="datetime"
+            from="dashboard"
           />
         </template>
       </div>

@@ -194,6 +194,7 @@ async def start_ai_job(
     user_id: object,
     daily_quota: int,
     symbol: str,
+    force: bool = False,
 ) -> AIJobState:
     if not is_llm_configured():
         raise LLMNotConfiguredError("尚未配置 LLM")
@@ -236,6 +237,7 @@ async def start_ai_job(
                 str(user_id),
                 daily_quota,
                 symbol,
+                force,
                 _job_id=job_id,
             )
         except Exception as exc:  # noqa: BLE001 - 入队失败要让用户看到明确错误
@@ -246,7 +248,7 @@ async def start_ai_job(
         return state
 
     task = asyncio.create_task(
-        _run_job(job_id, redis, user_id, daily_quota, symbol),
+        _run_job(job_id, redis, user_id, daily_quota, symbol, force),
         name=f"ai-job-{job_id}",
     )
     _TASKS.add(task)
@@ -260,9 +262,10 @@ async def run_ai_job_task(
     user_id: object,
     daily_quota: int,
     symbol: str,
+    force: bool = False,
 ) -> None:
     """ARQ worker 入口：复用同一套状态机。"""
-    await _run_job(job_id, redis, user_id, daily_quota, symbol)
+    await _run_job(job_id, redis, user_id, daily_quota, symbol, force)
 
 
 async def _run_job(
@@ -271,6 +274,7 @@ async def _run_job(
     user_id: object,
     daily_quota: int,
     symbol: str,
+    force: bool = False,
 ) -> None:
     try:
         await _update_state(
@@ -290,7 +294,11 @@ async def _run_job(
         )
         technical = analyze_technicals(quote, kline.bars, kline.source)
 
-        cached = await get_cached_ai_report(redis, user_id, daily_quota, quote)
+        cached = (
+            None
+            if force
+            else await get_cached_ai_report(redis, user_id, daily_quota, quote)
+        )
         if cached is not None:
             await _update_state(
                 redis,
@@ -357,6 +365,7 @@ async def _run_job(
                 sentiment=sentiment,
                 web=web,
                 progress=report_progress,
+                force=force,
             )
 
         try:

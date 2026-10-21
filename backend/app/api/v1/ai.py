@@ -33,7 +33,7 @@ async def get_ai_config(
         configured=is_llm_configured(),
         model=settings.llm_model,
         prompt_version=PROMPT_VERSION,
-        daily_quota=user.daily_analysis_quota,
+        daily_quota=settings.effective_daily_quota(user.daily_analysis_quota),
         quota_used=quota_used,
     )
 

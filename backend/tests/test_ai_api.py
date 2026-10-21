@@ -7,6 +7,7 @@ from httpx import ASGITransport, AsyncClient
 
 import app.api.v1.ai as ai_module
 import app.api.v1.stocks as stocks_module
+from app.core.config import settings
 from app.core.deps import get_current_user
 from app.db.models.user import User
 from app.main import app
@@ -29,6 +30,7 @@ async def client():
 
 async def test_ai_config_reports_unconfigured(client: AsyncClient, monkeypatch):
     monkeypatch.setattr(ai_module, "is_llm_configured", lambda: False)
+    monkeypatch.setattr(settings, "ai_daily_quota_override", 0)
 
     response = await client.get("/api/v1/ai/config")
 
@@ -38,6 +40,16 @@ async def test_ai_config_reports_unconfigured(client: AsyncClient, monkeypatch):
     assert body["daily_quota"] == 5
     assert body["quota_used"] == 0
     assert body["prompt_version"].startswith("multi_agent_decision.v3:")
+
+
+async def test_ai_config_quota_override(client: AsyncClient, monkeypatch):
+    monkeypatch.setattr(ai_module, "is_llm_configured", lambda: False)
+    monkeypatch.setattr(settings, "ai_daily_quota_override", 9999)
+
+    response = await client.get("/api/v1/ai/config")
+
+    assert response.status_code == 200
+    assert response.json()["daily_quota"] == 9999
 
 
 async def test_ai_analysis_fails_clearly_when_unconfigured(

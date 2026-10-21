@@ -1,20 +1,29 @@
 <script setup lang="ts">
+import { computed } from 'vue'
+
 import type { ReportSummary } from '@/api/reports'
 import { formatDateTime, formatTime, ratingTone, sourceLabel } from '@/utils/report'
 
-withDefaults(
+const props = withDefaults(
   defineProps<{
     item: ReportSummary
     /** time：只显示时分（已在按日分组的列表里）；datetime：显示 MMDD 时分 */
     timeStyle?: 'time' | 'datetime'
+    /** 来源页，用于报告详情的「返回」目标 */
+    from?: 'dashboard' | 'reports' | 'stock'
   }>(),
-  { timeStyle: 'time' },
+  { timeStyle: 'time', from: 'reports' },
 )
+
+const to = computed(() => ({
+  path: `/reports/${props.item.id}`,
+  query: { from: props.from },
+}))
 </script>
 
 <template>
   <RouterLink
-    :to="`/reports/${item.id}`"
+    :to="to"
     class="flex items-center gap-3 border-b border-line px-4 py-3.5 transition-colors last:border-b-0 hover:bg-surface"
   >
     <span

@@ -150,7 +150,12 @@ onMounted(() => {
           >
             {{ group.label }}
           </div>
-          <ReportListItem v-for="item in group.items" :key="item.id" :item="item" />
+          <ReportListItem
+            v-for="item in group.items"
+            :key="item.id"
+            :item="item"
+            from="reports"
+          />
         </div>
       </div>
     </section>

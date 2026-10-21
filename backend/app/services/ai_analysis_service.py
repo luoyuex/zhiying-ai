@@ -151,6 +151,7 @@ async def generate_ai_analysis(
     web: WebSearchResult | None = None,
     llm_client: LLMClient | None = None,
     progress: Callable[[str], Awaitable[None]] | None = None,
+    force: bool = False,
 ) -> AIAnalysisResponse:
     if llm_client is None:
         if not is_llm_configured():
@@ -165,7 +166,7 @@ async def generate_ai_analysis(
     except Exception as exc:  # noqa: BLE001
         logger.warning("读取 AI 缓存失败: %s", exc)
         cached_raw = None
-    if cached_raw:
+    if cached_raw and not force:
         try:
             cached = AIAnalysisResponse.model_validate_json(cached_raw)
             return cached.model_copy(

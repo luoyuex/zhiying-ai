@@ -29,8 +29,9 @@ async def run_ai_job(
     user_id: str,
     daily_quota: int,
     symbol: str,
+    force: bool = False,
 ) -> None:
-    await run_ai_job_task(ctx["redis"], job_id, user_id, daily_quota, symbol)
+    await run_ai_job_task(ctx["redis"], job_id, user_id, daily_quota, symbol, force)
 
 
 async def worker_heartbeat(ctx: dict) -> None:
