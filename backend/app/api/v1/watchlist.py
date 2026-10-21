@@ -1,6 +1,7 @@
 """自选股接口。"""
 
 from fastapi import APIRouter, Depends, Response
+from pydantic import ValidationError
 from redis.asyncio import Redis
 
 from app.core import errors
@@ -8,7 +9,14 @@ from app.core.config import settings
 from app.core.deps import get_current_user
 from app.db.models.user import User
 from app.db.redis import get_redis
+from app.llm.client import (
+    LLMNotConfiguredError,
+    LLMRateLimitedError,
+    LLMRequestError,
+    LLMResponseError,
+)
 from app.providers.symbols import InvalidSymbolError, parse_symbol
+from app.schemas.portfolio import PortfolioDiagnosisResponse
 from app.schemas.watchlist import (
     WatchlistAddRequest,
     WatchlistAddResponse,
@@ -18,7 +26,9 @@ from app.schemas.watchlist import (
     WatchlistStatus,
     WatchlistUpdateRequest,
 )
+from app.services.ai_analysis_service import QuotaExceededError, QuotaServiceError
 from app.services.market_service import MarketDataService
+from app.services.portfolio_service import PortfolioEmptyError, diagnose_portfolio
 from app.services.watchlist_service import (
     MAX_WATCHLIST,
     WatchlistLimitError,
@@ -101,6 +111,41 @@ async def batch(
         redis,
         force=payload.force,
     )
+
+
+@router.post(
+    "/portfolio-analysis",
+    response_model=PortfolioDiagnosisResponse,
+    summary="AI 组合诊断",
+)
+async def portfolio_diagnosis(
+    user: User = Depends(get_current_user),
+    redis: Redis = Depends(get_redis),
+    market: MarketDataService = Depends(get_market_service),
+) -> PortfolioDiagnosisResponse:
+    try:
+        return await diagnose_portfolio(
+            redis,
+            user.id,
+            settings.effective_daily_quota(user.daily_analysis_quota),
+            market,
+        )
+    except PortfolioEmptyError as exc:
+        raise errors.portfolio_empty() from exc
+    except QuotaExceededError as exc:
+        raise errors.analysis_quota_exceeded(exc.limit, exc.reset_seconds) from exc
+    except QuotaServiceError as exc:
+        raise errors.ai_service_unavailable(str(exc)) from exc
+    except LLMNotConfiguredError as exc:
+        raise errors.llm_not_configured() from exc
+    except LLMRateLimitedError as exc:
+        raise errors.llm_busy() from exc
+    except LLMResponseError as exc:
+        raise errors.llm_invalid_response() from exc
+    except LLMRequestError as exc:
+        raise errors.llm_error() from exc
+    except ValidationError as exc:
+        raise errors.llm_invalid_response() from exc
 
 
 @router.get("/{symbol}", response_model=WatchlistStatus, summary="是否已自选")

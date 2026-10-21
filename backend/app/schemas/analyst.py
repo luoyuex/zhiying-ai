@@ -126,6 +126,9 @@ class DecisionDraft(BaseModel):
     risk_warning: str = ""
     consensus: list[str] = Field(default_factory=list)
     dissent: list[str] = Field(default_factory=list)
+    # 结合用户持仓的动作建议；未自选/未提供持仓时为空
+    position_action: Literal["加仓", "建仓", "持有", "减仓", "清仓", "观望"] | None = None
+    position_advice: str = ""
 
     @field_validator("rating", mode="before")
     @classmethod
@@ -146,6 +149,31 @@ class DecisionDraft(BaseModel):
             number *= 10
         return max(0, min(100, number))
 
+    @field_validator("position_action", mode="before")
+    @classmethod
+    def normalize_position_action(cls, value: object) -> str | None:
+        text = str(value or "").strip()
+        if not text or text.lower() in {"none", "null", "nan"}:
+            return None
+        aliases = {
+            "加仓": "加仓",
+            "增持": "加仓",
+            "补仓": "加仓",
+            "建仓": "建仓",
+            "开仓": "建仓",
+            "买入": "建仓",
+            "持有": "持有",
+            "继续持有": "持有",
+            "减仓": "减仓",
+            "减持": "减仓",
+            "清仓": "清仓",
+            "卖出": "清仓",
+            "止损": "清仓",
+            "观望": "观望",
+            "等待": "观望",
+        }
+        return aliases.get(text)
+
     @field_validator("key_reasons", "risks", "consensus", "dissent", mode="before")
     @classmethod
     def normalize_list(cls, value: object) -> list[str]:
@@ -165,6 +193,7 @@ class DecisionDraft(BaseModel):
         "holding_period",
         "position_size",
         "risk_warning",
+        "position_advice",
         mode="before",
     )
     @classmethod

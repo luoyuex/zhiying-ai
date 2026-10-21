@@ -1,19 +1,15 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 
-import { aiApi, type AIJobState } from '@/api/ai'
-import {
-  watchlistApi,
-  type WatchlistEntry,
-  type WatchlistJobState,
-} from '@/api/watchlist'
+import type { AIJobState } from '@/api/ai'
+import { watchlistApi, type WatchlistEntry } from '@/api/watchlist'
 import AppShell from '@/components/layout/AppShell.vue'
+import PortfolioDiagnosis from '@/components/watchlist/PortfolioDiagnosis.vue'
 import WatchlistCard from '@/components/watchlist/WatchlistCard.vue'
+import { useAIBatch } from '@/composables/useAIBatch'
 import { useAuthStore } from '@/stores/auth'
 import { getErrorMessage } from '@/utils/errors'
 
-const POLL_INTERVAL = 2500
-const POLL_MAX_FAILURES = 5
 const MAX_BATCH = 20
 const PENDING_STORAGE_PREFIX = 'zhiying:watchlist-pending:'
 
@@ -22,67 +18,24 @@ const auth = useAuthStore()
 const watchlist = ref<WatchlistEntry[]>([])
 const loading = ref(true)
 const error = ref('')
-
 const removingSymbol = ref('')
 const selectedSymbols = ref<string[]>([])
-const jobStates = ref<Record<string, WatchlistJobState>>({})
-const pendingJobs = ref<Record<string, string>>({})
-const batchSubmitting = ref(false)
-const batchError = ref('')
-const pollFailures: Record<string, number> = {}
-let pollTimer: ReturnType<typeof setTimeout> | null = null
 
 const count = computed(() => watchlist.value.length)
 const selectedCount = computed(() => selectedSymbols.value.length)
 const allSelected = computed(
   () => count.value > 0 && count.value <= MAX_BATCH && selectedCount.value === count.value,
 )
-const pendingCount = computed(() => Object.keys(pendingJobs.value).length)
-const pendingStorageKey = computed(
-  () => `${PENDING_STORAGE_PREFIX}${auth.user?.id ?? 'anonymous'}`,
-)
 
-// 把排队中的任务写入 sessionStorage，刷新页面后可重新接上进度
-watch(
-  pendingJobs,
-  (value) => {
-    try {
-      if (Object.keys(value).length) {
-        sessionStorage.setItem(pendingStorageKey.value, JSON.stringify(value))
-      } else {
-        sessionStorage.removeItem(pendingStorageKey.value)
-      }
-    } catch {
-      // 隐私模式等场景下 sessionStorage 不可用，忽略即可
-    }
-  },
-  { deep: true },
-)
-
-function restorePendingJobs(): void {
-  try {
-    const raw = sessionStorage.getItem(pendingStorageKey.value)
-    if (!raw) return
-    const saved = JSON.parse(raw) as Record<string, unknown>
-    const entries = Object.entries(saved).filter(
-      ([symbol, jobId]) =>
-        typeof jobId === 'string' &&
-        jobId.length > 0 &&
-        watchlist.value.some((item) => item.symbol === symbol),
-    )
-    if (!entries.length) {
-      sessionStorage.removeItem(pendingStorageKey.value)
-      return
-    }
-    for (const [symbol, jobId] of entries) {
-      pendingJobs.value[symbol] = jobId as string
-      jobStates.value[symbol] = { status: 'queued' }
-    }
-    schedulePoll(0)
-  } catch {
-    // 存储内容损坏时直接忽略，不阻塞页面
-  }
-}
+const batch = useAIBatch({
+  storageKey: () => `${PENDING_STORAGE_PREFIX}${auth.user?.id ?? 'anonymous'}`,
+  onSucceeded: applyJobResult,
+  onAllDone: () => load(true),
+})
+const jobStates = batch.jobStates
+const pendingCount = batch.pendingCount
+const batchSubmitting = batch.submitting
+const batchError = batch.error
 
 async function load(silent = false): Promise<void> {
   if (!silent) {
@@ -112,9 +65,7 @@ async function remove(symbol: string): Promise<void> {
   // 立即从列表移除，不重新拉取
   watchlist.value = watchlist.value.filter((item) => item.symbol !== symbol)
   selectedSymbols.value = selectedSymbols.value.filter((item) => item !== symbol)
-  delete pendingJobs.value[symbol]
-  delete jobStates.value[symbol]
-  delete pollFailures[symbol]
+  batch.clearSymbol(symbol)
   try {
     await watchlistApi.remove(symbol)
   } catch (err) {
@@ -156,60 +107,6 @@ function onMetaUpdated(
   if (target) Object.assign(target, payload)
 }
 
-function schedulePoll(delay = POLL_INTERVAL): void {
-  if (pollTimer !== null) return
-  pollTimer = setTimeout(() => {
-    pollTimer = null
-    void pollJobs()
-  }, delay)
-}
-
-async function pollJobs(): Promise<void> {
-  const pending = Object.entries(pendingJobs.value)
-  if (!pending.length) return
-
-  await Promise.all(
-    pending.map(async ([symbol, jobId]) => {
-      try {
-        const { data } = await aiApi.job(jobId)
-        if (pendingJobs.value[symbol] !== jobId) return
-        delete pollFailures[symbol]
-
-        if (data.status === 'succeeded') {
-          delete pendingJobs.value[symbol]
-          jobStates.value[symbol] = { status: 'succeeded' }
-          applyJobResult(symbol, data)
-        } else if (data.status === 'failed') {
-          delete pendingJobs.value[symbol]
-          jobStates.value[symbol] = {
-            status: 'failed',
-            message: data.error_message || '分析失败',
-          }
-        } else {
-          jobStates.value[symbol] = { status: data.status, phase: data.phase }
-        }
-      } catch {
-        if (pendingJobs.value[symbol] !== jobId) return
-        pollFailures[symbol] = (pollFailures[symbol] ?? 0) + 1
-        if (pollFailures[symbol] >= POLL_MAX_FAILURES) {
-          delete pendingJobs.value[symbol]
-          jobStates.value[symbol] = {
-            status: 'failed',
-            message: '任务状态查询失败',
-          }
-        }
-      }
-    }),
-  )
-
-  if (Object.keys(pendingJobs.value).length) {
-    schedulePoll()
-  } else {
-    // 全部结束后静默同步一次，以数据库里的最新报告为准
-    await load(true)
-  }
-}
-
 function applyJobResult(symbol: string, job: AIJobState): void {
   if (!job.result) return
   const target = watchlist.value.find((item) => item.symbol === symbol)
@@ -220,46 +117,20 @@ function applyJobResult(symbol: string, job: AIJobState): void {
     rating: decision?.rating ?? job.result.analysis.rating,
     confidence: decision?.confidence ?? job.result.analysis.confidence,
     decision_source: decision?.decision_source ?? '',
+    position_action: decision?.position_action ?? null,
+    summary: (decision?.summary ?? job.result.analysis.summary).slice(0, 200),
     created_at: job.result.generated_at,
   }
 }
 
 async function submitBatch(): Promise<void> {
-  if (!selectedCount.value || batchSubmitting.value) return
-  batchSubmitting.value = true
-  batchError.value = ''
-  try {
-    const { data } = await watchlistApi.batchAnalysis(selectedSymbols.value)
-    for (const result of data) {
-      if (result.status === 'failed') {
-        jobStates.value[result.symbol] = {
-          status: 'failed',
-          message: result.error_message || result.error_code || '提交分析失败',
-        }
-      } else if (result.job_id) {
-        jobStates.value[result.symbol] = { status: 'queued' }
-        pendingJobs.value[result.symbol] = result.job_id
-      }
-    }
-    if (pendingCount.value) schedulePoll(0)
-  } catch (err) {
-    batchError.value = getErrorMessage(err, '批量分析提交失败')
-  } finally {
-    batchSubmitting.value = false
-  }
+  await batch.submit(selectedSymbols.value)
 }
 
 onMounted(async () => {
   await load()
   // 列表加载失败时保留存储，等下次刷新再恢复
-  if (!error.value) restorePendingJobs()
-})
-
-onBeforeUnmount(() => {
-  if (pollTimer !== null) {
-    clearTimeout(pollTimer)
-    pollTimer = null
-  }
+  if (!error.value) batch.restore(watchlist.value.map((item) => item.symbol))
 })
 </script>
 
@@ -308,6 +179,8 @@ onBeforeUnmount(() => {
     </section>
 
     <p v-if="batchError" class="mt-3 text-xs text-danger">{{ batchError }}</p>
+
+    <PortfolioDiagnosis v-if="!loading && !error && watchlist.length" class="mt-6" />
 
     <div class="mt-6">
       <div v-if="loading" class="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">

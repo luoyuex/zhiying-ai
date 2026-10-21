@@ -8,6 +8,7 @@ from app.llm.prompts import SYSTEM_PROMPT, build_user_prompt
 from app.providers.models import Quote
 from app.schemas.analysis import TechnicalAnalysis
 from app.schemas.analyst import AnalystReport, DecisionDraft, FinalDecision, TeamDiscussion
+from app.schemas.position import UserPosition
 from app.schemas.search import WebSearchResult
 
 logger = get_logger(__name__)
@@ -28,6 +29,7 @@ def build_decision_context(
     analysts: list[AnalystReport],
     web: WebSearchResult | None,
     discussion: TeamDiscussion | None = None,
+    position: UserPosition | None = None,
 ) -> dict[str, Any]:
     context: dict[str, Any] = {
         "quote": {
@@ -54,6 +56,8 @@ def build_decision_context(
             }
         ),
     }
+    if position is not None:
+        context["user_position"] = position.snapshot(quote.price)
     if discussion is not None and discussion.turns:
         context["discussion"] = {
             "summary": discussion.summary,
@@ -72,9 +76,42 @@ def build_decision_context(
     return context
 
 
+def _rule_position_advice(
+    rating: str,
+    position: UserPosition | None,
+    price: float | None,
+) -> tuple[str | None, str]:
+    """规则兜底下的持仓建议：至少保证成本与浮盈亏被用上。"""
+    if position is None:
+        return None, ""
+
+    pnl_pct: float | None = None
+    if position.has_cost and price is not None:
+        pnl_pct = (price - position.cost_price) / position.cost_price * 100
+        detail = f"成本 {position.cost_price:.2f}，现价 {price:.2f}，浮动 {pnl_pct:+.2f}%"
+        if position.quantity is not None:
+            amount = (price - position.cost_price) * position.quantity
+            detail += f"（约 {amount:+.0f} 元）"
+    else:
+        detail = "未填写完整成本/数量"
+
+    if rating == "买入":
+        action = "加仓" if pnl_pct is not None and pnl_pct < 0 else "建仓"
+        advice = f"{detail}；评级偏多，可分批{action}，避免一次性追高。"
+    elif rating == "持有":
+        action = "持有" if position.has_cost else "观望"
+        advice = f"{detail}；评级中性，建议持有观察，跌破支撑再考虑减仓。"
+    else:
+        action = "清仓" if pnl_pct is not None and pnl_pct <= -8 else "减仓"
+        advice = f"{detail}；评级偏空，建议反弹时{action}，严格执行止损。"
+    return action, advice
+
+
 def _rule_decision(
     technical: TechnicalAnalysis,
     analysts: list[AnalystReport],
+    user_position: UserPosition | None = None,
+    price: float | None = None,
 ) -> FinalDecision:
     weighted = 0.0
     total_weight = 0.0
@@ -113,6 +150,9 @@ def _rule_decision(
     consensus = [f"{item.name} 偏乐观" for item in analysts if item.score >= 65]
     dissent = [f"{item.name} 偏谨慎" for item in analysts if item.score < 45]
     confidence = max(30, min(90, round(50 + abs(average - 50) * 1.2)))
+    position_action, position_advice = _rule_position_advice(
+        rating, user_position, price
+    )
 
     return FinalDecision(
         rating=rating,
@@ -132,6 +172,8 @@ def _rule_decision(
         dissent=dissent,
         levels=technical.levels,
         decision_source="rule_fallback",
+        position_action=position_action,
+        position_advice=position_advice,
     )
 
 
@@ -142,8 +184,9 @@ async def build_decision(
     analysts: list[AnalystReport],
     web: WebSearchResult | None,
     discussion: TeamDiscussion | None = None,
+    position: UserPosition | None = None,
 ) -> FinalDecision:
-    context = build_decision_context(quote, technical, analysts, web, discussion)
+    context = build_decision_context(quote, technical, analysts, web, discussion, position)
     try:
         data = await llm_client.generate_json(SYSTEM_PROMPT, build_user_prompt(context))
         draft = DecisionDraft.model_validate(data)
@@ -154,4 +197,4 @@ async def build_decision(
         )
     except (LLMError, ValueError) as exc:
         logger.warning("首席策略官 LLM 决策失败，使用规则兜底: %s", exc)
-        return _rule_decision(technical, analysts)
+        return _rule_decision(technical, analysts, position, quote.price)

@@ -10,6 +10,8 @@ class LatestAnalysis(BaseModel):
     rating: str
     confidence: int
     decision_source: str
+    position_action: str | None = None
+    summary: str = ""
     created_at: datetime
 
 

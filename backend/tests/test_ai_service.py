@@ -8,6 +8,7 @@ from app.db.models.user import User
 from app.llm.client import LLMResponseError
 from app.providers.base import now_shanghai
 from app.schemas.analysis import TechnicalAnalysis
+from app.schemas.position import UserPosition
 from app.schemas.search import WebSearchResult, WebSource
 from app.services.ai_analysis_service import (
     QuotaExceededError,
@@ -152,6 +153,63 @@ async def test_generate_caches_six_analysts_and_counts_quota():
     # 六位分析师 + 一次团队讨论 + 一次首席决策；第二次命中缓存不再调用
     assert llm.calls == 8
     assert {item.engine for item in first.analysts} == {"rule"}
+
+
+async def test_generate_injects_position_and_isolates_cache():
+    redis = FakeRedis()
+    user, quote, technical, bars = make_analysis("600012")
+    position = UserPosition(cost_price=10.0, quantity=1000, note="核心持仓")
+    reply = {
+        **decision_reply(),
+        "position_action": "加仓",
+        "position_advice": "成本 10.00，现价高于成本，可分批加仓。",
+    }
+    llm = FakeLLM([reply])
+
+    first = await generate_ai_analysis(
+        redis,
+        user.id,
+        user.daily_analysis_quota,
+        quote,
+        technical,
+        bars,
+        llm_client=llm,
+        position=position,
+    )
+
+    assert first.cached is False
+    assert first.decision is not None
+    assert first.decision.position_action == "加仓"
+    assert first.decision.position_advice.startswith("成本 10.00")
+    decision_prompt = next(prompt for prompt in llm.prompts if '"user_position"' in prompt)
+    assert '"pnl_pct"' in decision_prompt
+
+    # 持仓变化后缓存必须失效
+    changed = await generate_ai_analysis(
+        redis,
+        user.id,
+        user.daily_analysis_quota,
+        quote,
+        technical,
+        bars,
+        llm_client=FakeLLM([decision_reply()]),
+        position=UserPosition(cost_price=12.0, quantity=1000),
+    )
+    assert changed.cached is False
+
+    # 其他用户不能读到该用户的报告缓存
+    other_user = make_user()
+    other = await generate_ai_analysis(
+        redis,
+        other_user.id,
+        other_user.daily_analysis_quota,
+        quote,
+        technical,
+        bars,
+        llm_client=FakeLLM([decision_reply()]),
+        position=position,
+    )
+    assert other.cached is False
 
 
 async def test_quota_exhausted_blocks_llm():

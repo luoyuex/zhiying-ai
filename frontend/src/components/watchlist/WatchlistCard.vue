@@ -32,6 +32,38 @@ const metaParts = computed(() => {
   return parts
 })
 
+const pnlPct = computed(() => {
+  const { price, cost_price: cost } = props.item
+  if (price === null || cost === null || cost <= 0) return null
+  return ((price - cost) / cost) * 100
+})
+
+const pnlAmount = computed(() => {
+  const { price, cost_price: cost, quantity } = props.item
+  if (price === null || cost === null || cost <= 0 || quantity === null) return null
+  return (price - cost) * quantity
+})
+
+const pnlTone = computed(() => {
+  if (pnlPct.value === null || pnlPct.value === 0) return 'text-ink-2'
+  return pnlPct.value > 0 ? 'text-up' : 'text-down'
+})
+
+const actionTone = computed(() => {
+  const action = props.item.latest?.position_action
+  if (action === '加仓' || action === '建仓') return 'bg-up-soft text-up'
+  if (action === '减仓' || action === '清仓') return 'bg-down-soft text-down'
+  return 'bg-surface-2 text-ink-2'
+})
+
+function formatSignedPct(value: number): string {
+  return `${value > 0 ? '+' : ''}${value.toFixed(2)}%`
+}
+
+function formatSignedAmount(value: number): string {
+  return `${value > 0 ? '+' : ''}${value.toFixed(0)} 元`
+}
+
 const batchText = computed(() => {
   const state = props.batch
   if (!state) return ''
@@ -176,6 +208,13 @@ async function saveEdit(): Promise<void> {
           >
             {{ item.latest.rating }}
           </span>
+          <span
+            v-if="item.latest.position_action"
+            class="inline-flex h-6 shrink-0 items-center rounded-md px-2 text-[11px] font-medium"
+            :class="actionTone"
+          >
+            建议{{ item.latest.position_action }}
+          </span>
           <span class="truncate text-[11px] text-ink-3">
             置信度 {{ item.latest.confidence }} ·
             {{ formatDateTime(item.latest.created_at) }}
@@ -199,10 +238,23 @@ async function saveEdit(): Promise<void> {
         </RouterLink>
       </div>
 
+      <p
+        v-if="item.latest?.summary"
+        class="mt-1.5 line-clamp-2 text-[11px] leading-relaxed text-ink-2"
+      >
+        {{ item.latest.summary }}
+      </p>
+
       <div class="mt-2 flex items-start justify-between gap-2">
         <div class="min-w-0 flex-1 text-[11px] text-ink-3">
           <span v-if="metaParts.length">{{ metaParts.join(' · ') }}</span>
           <span v-else>未填写成本/数量</span>
+          <span v-if="pnlPct !== null" class="ml-1.5 tabular-nums" :class="pnlTone">
+            浮动 {{ formatSignedPct(pnlPct) }}
+            <template v-if="pnlAmount !== null">
+              · {{ formatSignedAmount(pnlAmount) }}
+            </template>
+          </span>
           <p v-if="item.note" class="mt-0.5 truncate text-ink-2">{{ item.note }}</p>
         </div>
         <button

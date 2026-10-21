@@ -25,7 +25,11 @@ missing 列出该维度缺失的数据。
    要降低 confidence 并在 risks 中注明；若输入包含 discussion（团队讨论纪要），
    要吸收讨论后的收敛结论，并在 consensus/dissent 中体现保留的分歧。
 5. 公开网页信息只作新闻/事件背景，必须核对日期，不能当作确定事实。
-6. 所有文字使用简体中文，避免空话，不承诺收益。
+6. 若输入包含 user_position（用户在自选股里记录的成本价、数量、浮盈亏、备注），
+   必须结合该持仓给出针对性的操作建议，并输出 position_action 与 position_advice；
+   建议要与评级一致，不能编造用户未提供的成本或数量。没有 user_position 时，
+   position_action 输出 null，position_advice 输出空字符串。
+7. 所有文字使用简体中文，避免空话，不承诺收益。
 
 只输出一个 JSON 对象，不要输出 Markdown、代码块或解释文字。字段如下：
 {
@@ -39,7 +43,9 @@ missing 列出该维度缺失的数据。
   "risks": ["2-5 条风险"],
   "risk_warning": "一句话风险提示",
   "consensus": ["分析师之间的共识"],
-  "dissent": ["分析师之间的分歧"]
+  "dissent": ["分析师之间的分歧"],
+  "position_action": "加仓 | 建仓 | 持有 | 减仓 | 清仓 | 观望 | null",
+  "position_advice": "结合用户成本与浮盈亏的具体操作建议，无持仓时为空字符串"
 }"""
 
 USER_PROMPT_TEMPLATE = """请基于以下材料做最终决策。输入 JSON：
@@ -59,5 +65,5 @@ _PROMPT_DIGEST = hashlib.sha256(
 ).hexdigest()[:12]
 
 PROMPT_VERSION = (
-    f"multi_agent_decision.v3:{_PROMPT_DIGEST}-{ANALYST_PROMPT_DIGEST}-{DISCUSSION_PROMPT_DIGEST}"
+    f"multi_agent_decision.v4:{_PROMPT_DIGEST}-{ANALYST_PROMPT_DIGEST}-{DISCUSSION_PROMPT_DIGEST}"
 )

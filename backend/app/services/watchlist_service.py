@@ -142,6 +142,8 @@ async def list_watchlist(
             rating=row.rating,
             confidence=row.confidence,
             decision_source=str(decision.get("decision_source") or ""),
+            position_action=decision.get("position_action"),
+            summary=str(decision.get("summary") or "")[:200],
             created_at=row.created_at,
         )
 

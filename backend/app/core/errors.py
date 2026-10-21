@@ -151,3 +151,7 @@ def ai_service_unavailable(message: str) -> AppError:
 
 def watchlist_full(limit: int) -> AppError:
     return AppError(ErrorCode.WATCHLIST_FULL, f"自选股最多 {limit} 只，请先移除部分股票", 409)
+
+
+def portfolio_empty() -> AppError:
+    return AppError(ErrorCode.VALIDATION_ERROR, "自选股为空，请先添加股票再做组合诊断", 400)

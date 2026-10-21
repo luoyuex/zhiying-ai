@@ -17,6 +17,7 @@ from app.schemas.ai import AIAnalysisPayload, AIAnalysisResponse
 from app.schemas.analysis import TechnicalAnalysis
 from app.schemas.analyst import FinalDecision
 from app.schemas.company import FinancialData, FundFlowData, SentimentData
+from app.schemas.position import UserPosition
 from app.schemas.search import WebSearchResult
 from app.services.analyst_service import build_analysts
 from app.services.decision_service import build_decision
@@ -47,7 +48,7 @@ def _today() -> str:
     return datetime.now(TZ_SHANGHAI).strftime("%Y-%m-%d")
 
 
-def _seconds_to_midnight() -> int:
+def seconds_to_midnight() -> int:
     now = datetime.now(TZ_SHANGHAI)
     tomorrow = datetime.combine(now.date() + timedelta(days=1), time.min, tzinfo=TZ_SHANGHAI)
     return max(1, int((tomorrow - now).total_seconds()))
@@ -68,16 +69,37 @@ async def read_quota_used(redis: Redis, user_id: object, *, strict: bool = False
         return 0
 
 
-def _cache_key(quote: Quote) -> str:
+def _position_digest(position: UserPosition | None) -> str:
+    if position is None:
+        return "none"
+    raw = f"{position.cost_price}:{position.quantity}:{position.note}"
+    return hashlib.sha1(raw.encode("utf-8")).hexdigest()[:8]
+
+
+def _cache_key(
+    quote: Quote,
+    user_id: object,
+    position: UserPosition | None = None,
+) -> str:
+    """报告包含用户持仓建议，缓存必须按用户与持仓隔离。"""
     trade_date = quote.fetched_at.astimezone(TZ_SHANGHAI).strftime("%Y-%m-%d")
     model_digest = hashlib.sha1(settings.llm_model.encode("utf-8")).hexdigest()[:8]
-    return f"ai:report:{quote.symbol}:{trade_date}:{PROMPT_VERSION}:{model_digest}"
+    return (
+        f"ai:report:{user_id}:{quote.symbol}:{trade_date}:"
+        f"{PROMPT_VERSION}:{model_digest}:{_position_digest(position)}"
+    )
 
 
-async def cache_ai_report(redis: Redis, quote: Quote, report: AIAnalysisResponse) -> None:
+async def cache_ai_report(
+    redis: Redis,
+    quote: Quote,
+    report: AIAnalysisResponse,
+    user_id: object,
+    position: UserPosition | None = None,
+) -> None:
     try:
         await redis.set(
-            _cache_key(quote),
+            _cache_key(quote, user_id, position),
             report.model_dump_json(),
             ex=settings.llm_cache_seconds,
         )
@@ -113,10 +135,11 @@ async def get_cached_ai_report(
     user_id: object,
     daily_quota: int,
     quote: Quote,
+    position: UserPosition | None = None,
 ) -> AIAnalysisResponse | None:
     """在搜索/LLM 之前检查 6h 缓存，避免重复消耗元宝搜索和 LLM。"""
     try:
-        raw = await redis.get(_cache_key(quote))
+        raw = await redis.get(_cache_key(quote, user_id, position))
     except Exception as exc:  # noqa: BLE001
         logger.warning("读取 AI 缓存失败: %s", exc)
         return None
@@ -152,6 +175,7 @@ async def generate_ai_analysis(
     llm_client: LLMClient | None = None,
     progress: Callable[[str], Awaitable[None]] | None = None,
     force: bool = False,
+    position: UserPosition | None = None,
 ) -> AIAnalysisResponse:
     if llm_client is None:
         if not is_llm_configured():
@@ -159,7 +183,7 @@ async def generate_ai_analysis(
         llm_client = LLMClient()
 
     quota_used = await read_quota_used(redis, user_id, strict=True)
-    cache_key = _cache_key(quote)
+    cache_key = _cache_key(quote, user_id, position)
 
     try:
         cached_raw = await redis.get(cache_key)
@@ -180,7 +204,7 @@ async def generate_ai_analysis(
             logger.warning("AI 缓存内容损坏，重新生成")
 
     if quota_used >= daily_quota:
-        raise QuotaExceededError(daily_quota, _seconds_to_midnight())
+        raise QuotaExceededError(daily_quota, seconds_to_midnight())
 
     rule_analysts = build_analysts(
         quote,
@@ -223,7 +247,9 @@ async def generate_ai_analysis(
 
     if progress is not None:
         await progress("首席策略官汇总六份报告")
-    decision = await build_decision(llm_client, quote, technical, analysts, web, discussion)
+    decision = await build_decision(
+        llm_client, quote, technical, analysts, web, discussion, position
+    )
     headline = _headline_from_decision(decision, technical)
 
     now = datetime.now(TZ_SHANGHAI)
@@ -262,7 +288,7 @@ async def generate_ai_analysis(
         await redis.set(cache_key, report.model_dump_json(), ex=settings.llm_cache_seconds)
         new_used = await redis.incr(quota_key(user_id))
         if new_used == 1:
-            await redis.expire(quota_key(user_id), _seconds_to_midnight())
+            await redis.expire(quota_key(user_id), seconds_to_midnight())
         report = report.model_copy(update={"quota_used": new_used})
     except Exception as exc:  # noqa: BLE001
         logger.warning("写入 AI 缓存/额度失败: %s", exc)

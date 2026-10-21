@@ -6,6 +6,8 @@ export interface LatestAnalysis {
   rating: string
   confidence: number
   decision_source: string
+  position_action: string | null
+  summary: string
   created_at: string
 }
 
@@ -50,6 +52,26 @@ export interface WatchlistJobState {
   message?: string
 }
 
+export interface PortfolioPositionAdvice {
+  symbol: string
+  name: string
+  action: '加仓' | '建仓' | '持有' | '减仓' | '清仓' | '观望'
+  reason: string
+}
+
+export interface PortfolioDiagnosis {
+  health_score: number
+  summary: string
+  risk_notes: string[]
+  allocation_advice: string
+  positions: PortfolioPositionAdvice[]
+  generated_at: string
+  model: string
+  quota_used: number
+  quota_limit: number
+  disclaimer: string
+}
+
 export const watchlistApi = {
   list() {
     return http.get<WatchlistEntry[]>('/watchlist')
@@ -71,6 +93,13 @@ export const watchlistApi = {
     return http.post<WatchlistBatchResult[]>('/watchlist/batch-analysis', {
       symbols,
       force,
+    })
+  },
+
+  /** 组合 AI 诊断：单次 LLM 调用，耗时可能较长 */
+  portfolioAnalysis() {
+    return http.post<PortfolioDiagnosis>('/watchlist/portfolio-analysis', null, {
+      timeout: 200000,
     })
   },
 

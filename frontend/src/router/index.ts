@@ -31,6 +31,12 @@ const router = createRouter({
       meta: { requiresAuth: true, title: '工作台' },
     },
     {
+      path: '/screener',
+      name: 'screener',
+      component: () => import('@/pages/ScreenerPage.vue'),
+      meta: { requiresAuth: true, title: '选股' },
+    },
+    {
       path: '/watchlist',
       name: 'watchlist',
       component: () => import('@/pages/WatchlistPage.vue'),

@@ -55,6 +55,9 @@ export interface FinalDecision {
   dissent: string[]
   levels: PriceLevels
   decision_source: string
+  /** 结合用户持仓的动作建议；未自选或旧报告为 null/空 */
+  position_action: string | null
+  position_advice: string
 }
 
 export interface WebSource {

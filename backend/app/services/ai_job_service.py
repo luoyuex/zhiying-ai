@@ -38,6 +38,7 @@ from app.services.ai_analysis_service import (
     get_cached_ai_report,
 )
 from app.services.market_service import MarketDataService
+from app.services.position_service import load_user_position
 from app.services.report_history_service import save_analysis_report
 from app.services.sentiment_service import build_sentiment_data
 from app.services.technical_analysis import InsufficientDataError, analyze_technicals
@@ -309,11 +310,12 @@ async def _run_job(
             limit=90,
         )
         technical = analyze_technicals(quote, kline.bars, kline.source)
+        position = await load_user_position(user_id, quote.symbol)
 
         cached = (
             None
             if force
-            else await get_cached_ai_report(redis, user_id, daily_quota, quote)
+            else await get_cached_ai_report(redis, user_id, daily_quota, quote, position)
         )
         if cached is not None:
             await _update_state(
@@ -382,12 +384,13 @@ async def _run_job(
                 web=web,
                 progress=report_progress,
                 force=force,
+                position=position,
             )
 
         try:
             report_id = await save_analysis_report(user_id, result)
             result = result.model_copy(update={"report_id": str(report_id)})
-            await cache_ai_report(redis, quote, result)
+            await cache_ai_report(redis, quote, result, user_id, position)
         except Exception as exc:  # noqa: BLE001
             logger.exception("保存分析报告失败 job_id=%s: %s", job_id, exc)
 

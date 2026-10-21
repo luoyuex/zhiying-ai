@@ -59,6 +59,13 @@ const decisionBadgeClass = computed(() => {
   if (decision.value?.rating === '卖出') return 'bg-down-soft text-down'
   return 'bg-surface-2 text-ink-2'
 })
+
+const positionActionTone = computed(() => {
+  const action = decision.value?.position_action
+  if (action === '加仓' || action === '建仓') return 'bg-up-soft text-up'
+  if (action === '减仓' || action === '清仓') return 'bg-down-soft text-down'
+  return 'bg-surface-2 text-ink-2'
+})
 const levels = computed(() => {
   const data = decision.value?.levels
   if (!data) return []
@@ -255,6 +262,23 @@ watch(
             <div class="text-[11px] text-ink-3">仓位建议</div>
             <p class="mt-0.5 text-xs text-ink-2">{{ decision.position_size }}</p>
           </div>
+        </div>
+
+        <div
+          v-if="decision.position_advice"
+          class="mt-4 rounded-md border border-line bg-surface px-4 py-3"
+        >
+          <div class="flex flex-wrap items-center gap-2">
+            <span class="text-xs font-medium text-ink">我的持仓建议</span>
+            <span
+              v-if="decision.position_action"
+              class="rounded px-1.5 py-0.5 text-[11px] font-semibold"
+              :class="positionActionTone"
+            >
+              {{ decision.position_action }}
+            </span>
+          </div>
+          <p class="mt-1 text-xs leading-relaxed text-ink-2">{{ decision.position_advice }}</p>
         </div>
 
         <div class="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-6">

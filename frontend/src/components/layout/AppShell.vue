@@ -19,6 +19,7 @@ interface NavItem {
 
 const NAV_ITEMS: NavItem[] = [
   { label: '工作台', to: '/', active: (path) => path === '/' },
+  { label: '选股', to: '/screener', active: (path) => path.startsWith('/screener') },
   { label: '自选股', to: '/watchlist', active: (path) => path.startsWith('/watchlist') },
   { label: '历史报告', to: '/reports', active: (path) => path.startsWith('/reports') },
 ]

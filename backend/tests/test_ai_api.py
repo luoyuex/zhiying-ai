@@ -39,7 +39,7 @@ async def test_ai_config_reports_unconfigured(client: AsyncClient, monkeypatch):
     assert body["configured"] is False
     assert body["daily_quota"] == 5
     assert body["quota_used"] == 0
-    assert body["prompt_version"].startswith("multi_agent_decision.v3:")
+    assert body["prompt_version"].startswith("multi_agent_decision.v4:")
 
 
 async def test_ai_config_quota_override(client: AsyncClient, monkeypatch):
