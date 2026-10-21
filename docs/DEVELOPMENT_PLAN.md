@@ -383,7 +383,7 @@
 ### 5.1 马上要做的（P1 收尾）
 | 事项 | 说明 |
 | --- | --- |
-| ⬜ git 初始化 + 首次提交 | `git init` + 提交骨架；`.env` 已在 .gitignore |
+| ✅ git 初始化 + 首次提交 | 已完成：私有仓库 `github.com/luoyuex/zhiying-ai`，`main` 已推送（`01def1a`）；`.env` 与 `.workbuddy-ai/` 不入库 |
 | ⬜ SMTP 真实发信联调 | 用户填 `.env` 的 `SMTP_USER`/`SMTP_PASSWORD`（授权码）并把 `EMAIL_MODE` 改 `smtp`，重启后端实测收件 |
 | ⬜ admin 账号 | 无注册入口生成 admin；需提供 SQL 或 CLI 脚本 |
 
@@ -497,11 +497,11 @@ npm run build       # vue-tsc + vite build
 
 ## 九、当前待办（按顺序）
 
-1. `git init` + 首次提交（P1+P2 基线仍未纳入版本管理）
+1. ✅ `git init` + 首次提交 + 私有远端（`github.com/luoyuex/zhiying-ai`）
 2. SMTP 真实发信联调（需要用户提供邮箱授权码）
 3. admin 账号生成脚本（SQL 或 CLI）
 4. P2 收尾 A：`stocks` 表 + 全量 A 股种子 + 股票搜索接口（代码/名称/拼音）
-5. P2 收尾 B：财务 / 资金流 / 新闻 Provider + AKShare 线程池接入
+5. P2 收尾 B：新闻/公告结构化 Provider（财务/资金流已完成；AKShare 已由东财直连替代）
 6. P3：股票名称/拼音搜索 + 自选股 + klinecharts 指标（个股详情页 v1 + 技术诊断 + 历史已完成）
 7. P4：六分析师逐位接 LLM + 团队讨论时间线 + SSE/ARQ（当前六分析师规则版 + 首席 LLM 决策已完成）
 8. P5：历史并排 diff + PDF 导出
