@@ -1,7 +1,7 @@
 # 智赢 AI 开发计划与进度总览
 
 > 本文档是项目的唯一进度真相源。每完成一个阶段，更新「状态」列与「已完成清单」，避免范围漂移与重复劳动。
-> 最后更新：2026-10-21（股票基础库：`stocks` 表 + 全量 A 股种子 + 名称/拼音搜索）
+> 最后更新：2026-10-21（P4：六位分析师逐位接 LLM + 逐位进度 + 引擎标记）
 
 ---
 
@@ -47,7 +47,7 @@
 | P1 | 项目骨架 + 邮箱验证码认证 | ✅ 完成 | 2026-10-21 |
 | P2 | 行情数据层（Provider + 缓存/限流/熔断） | 🚧 进行中 | 报价/K线/财务/资金流/情绪/股票库已通 |
 | P3 | 个股页（报价/K线/指标） | 🚧 进行中 | 详情页 v1 已上线 |
-| P4 | Agent 编排 + 分析任务 + SSE 流式 | 🚧 进行中 | 六分析师 + 首席决策已上线 |
+| P4 | Agent 编排 + 分析任务 + SSE 流式 | 🚧 进行中 | 六位分析师逐位 LLM + 首席决策已上线 |
 | P5 | 分析报告页 + 评分卡 | 🚧 进行中 | 历史报告已落库 |
 | P6 | 自选股 + 分析历史对比 | 🚧 进行中 | 历史已落库，对比/自选待做 |
 | P7 | 管理后台 + 生产部署（Nginx/HTTPS） | ⬜ 未开始 | — |
@@ -396,6 +396,27 @@
 
 **说明**：东财会对连续全量拉取临时断连（本次实测出现过一次），重试仍失败时稍后重跑 `npm run seed` 即可，旧数据不受影响。
 
+### 4.22 六位分析师逐位接 LLM（2026-10-21）
+
+**背景**：此前六位分析师是规则版，只有首席决策用 LLM，报告里「六位分析师」的结论缺少模型推理；P4 要先把分析链路补完整。
+
+| 事项 | 内容 | 状态 |
+| --- | --- | --- |
+| LLM 分析师 | 每位分析师独立提示词，只拿本维度原始数据 + 代码初稿；按 `llm_analyst_concurrency`（默认 3）并发 | ✅ |
+| 失败隔离 | 单点超时/空响应/JSON 异常只回退该位规则稿，整份报告不中断；日志保留堆栈 | ✅ |
+| 引擎标记 | `AnalystReport` 新增 `engine`（`llm` / `rule`），旧报告默认 `rule`；报告页与个股 AI 卡显示标签 | ✅ |
+| 进度细分 | job 阶段变为「六位分析师分析中 0/6 → 6/6 → 首席策略官汇总」；并发完成时串行写状态，避免进度回退 | ✅ |
+| Token 预算 | 推理模型思考吃 token：`LLM_MAX_TOKENS` 2048 → **4096**；财报上下文只取近 3 期 | ✅ |
+| 缓存版本 | `PROMPT_VERSION` 升到 `multi_agent_decision.v2`，并入分析师提示词 digest，旧缓存自动失效 | ✅ |
+| 配置 | 新增 `LLM_ANALYST_TIMEOUT_SECONDS`（150）与 `LLM_ANALYST_CONCURRENCY`（3）；`LLM_JOB_TIMEOUT_SECONDS` 420 → 600 | ✅ |
+
+**验收**
+- 真实 SenseNova（`sensenova-6.8-flash-lite`）跑 600519：六位分析师全部 `engine=llm`，首席决策 `decision_source=llm`（持有，置信度 55）
+- 首次真实跑暴露两个问题并已修复：财报 `date` 无法 JSON 序列化；推理模型 2048 token 被思考吃光导致空响应
+- 后端 **79 passed**（新增 LLM 分析师、单点回退、进度、日期序列化用例）；前端 `npm run build` 通过
+
+**说明**：当次东财资金流/指数接口被临时限流，资金面数据缺失，LLM 如实写入缺口并按中性处理，说明降级链路正常。
+
 ---
 
 ## 五、未完成清单（按优先级）
@@ -442,10 +463,10 @@
 - ✅ 全部历史入口：顶栏用户菜单 + `/reports` 跨股票列表（日期分组/筛选），报告页可返回全部历史（2026-10-21）
 - ✅ 详情页 AI 分析卡：未配置提示、手动触发、轮询阶段/耗时、六分析师卡片、决策/价位/数据缺口/额度展示（2026-10-21）
 - ✅ 价位代码计算：entry −2% / 止盈 +8% / 止损 ATR 钳制 −5%~−8%，`computed_by="code"`
-- 🟡 六分析师实现方式：当前由代码基于真实数据生成，未逐位调用 LLM（成本/延迟更低）；LLM 版可后续逐位替换
+- ✅ 六位分析师逐位接 LLM：并发 3 路、单点失败回退规则稿、`engine` 标记、逐位进度（2026-10-21，见 4.22）
 - ⬜ 团队讨论时间线、SSE 流式、ARQ worker、批量/定时
 - ⬜ `llm/crypto.py`：AES-256-GCM 密钥加密，主密钥 `APP_ENCRYPTION_KEY` 走环境变量
-- 🟡 `prompts/v1/`：首席决策提示词在代码中；六分析师/讨论的 YAML 化待做
+- ✅ 分析师与决策提示词均在代码中（`llm/analyst_prompts.py` + `llm/prompts.py`），`PROMPT_VERSION` 含双 digest；YAML 化暂不做
 - ⬜ ARQ worker（当前用进程内 asyncio task；服务重启会中断，已做 stale 检测；后续迁移 ARQ + 条件 UPDATE 抢占）
 - ⬜ SSE：Redis Pub/Sub 转发，事件 `job_status/agent_started/agent_token/agent_completed/discussion_*/decision_completed/done/error`，15s 心跳，断线按 `agent_runs` 回放
 - 🟡 数据表：`analysis_reports` 已建；`analysis_jobs`、`agent_runs`、`llm_providers`、`app_settings`、`usage_daily` 待做
@@ -523,5 +544,5 @@ npm run build       # vue-tsc + vite build
 4. ✅ P2 收尾 A：`stocks` 表 + 全量 A 股种子 + 股票搜索接口（代码/名称/拼音）
 5. P2 收尾 B：新闻/公告结构化 Provider（财务/资金流已完成；AKShare 已由东财直连替代）
 6. P3：自选股 + klinecharts 指标（个股详情页 v1、技术诊断、名称/拼音搜索已完成）
-7. P4：六分析师逐位接 LLM + 团队讨论时间线 + SSE/ARQ（当前六分析师规则版 + 首席 LLM 决策已完成）
+7. P4：团队讨论时间线 + SSE 流式 + ARQ（六分析师逐位 LLM 已完成）
 8. P5：历史并排 diff + PDF 导出

@@ -37,19 +37,53 @@ class FakeRedis:
         return None
 
 
+_ANALYST_MARKERS = {
+    "技术面分析师": "technical",
+    "基本面分析师": "fundamental",
+    "资金面分析师": "fund_flow",
+    "风险管理分析师": "risk",
+    "市场情绪分析师": "sentiment",
+    "新闻舆情分析师": "news",
+}
+
+
 class FakeLLM:
-    def __init__(self, replies: list[dict | Exception]) -> None:
+    """首席决策与六位分析师共用：默认分析师调用失败以保留规则稿。"""
+
+    def __init__(
+        self,
+        replies: list[dict | Exception],
+        *,
+        analyst_reply: dict | None = None,
+        fail_keys: tuple[str, ...] = (),
+    ) -> None:
         self.replies = replies
+        self.analyst_reply = analyst_reply
+        self.fail_keys = set(fail_keys)
         self.calls = 0
+        self.decision_calls = 0
+        self.analyst_calls = 0
         self.prompts: list[str] = []
 
     async def generate_json(self, system_prompt: str, user_prompt: str) -> dict:
         self.calls += 1
         self.prompts.append(user_prompt)
-        reply = self.replies[min(self.calls - 1, len(self.replies) - 1)]
-        if isinstance(reply, Exception):
-            raise reply
-        return reply
+
+        if "首席策略官" in system_prompt:
+            reply = self.replies[min(self.decision_calls, len(self.replies) - 1)]
+            self.decision_calls += 1
+            if isinstance(reply, Exception):
+                raise reply
+            return reply
+
+        key = next(
+            (value for marker, value in _ANALYST_MARKERS.items() if marker in system_prompt),
+            None,
+        )
+        self.analyst_calls += 1
+        if key is None or key in self.fail_keys or self.analyst_reply is None:
+            raise LLMResponseError(f"mock analyst failure: {key}")
+        return self.analyst_reply
 
 
 def make_user(quota: int = 2) -> User:
@@ -106,7 +140,9 @@ async def test_generate_caches_six_analysts_and_counts_quota():
     assert first.analysis.rating == "看多"
     assert second.cached is True
     assert second.quota_used == 1
-    assert llm.calls == 1
+    # 六位分析师 + 一次首席决策；第二次命中缓存不再调用
+    assert llm.calls == 7
+    assert {item.engine for item in first.analysts} == {"rule"}
 
 
 async def test_quota_exhausted_blocks_llm():
@@ -146,7 +182,7 @@ async def test_invalid_decision_falls_back_to_rule():
         llm_client=llm,
     )
 
-    assert llm.calls == 1
+    assert llm.calls == 7
     assert report.decision is not None
     assert report.decision.decision_source == "rule_fallback"
     assert report.quota_used == 1
@@ -204,8 +240,8 @@ async def test_web_info_goes_into_prompt_and_response():
 
     assert report.web_search_used is True
     assert report.web_sources[0].title == "测试公告"
-    assert "public_web_info" in llm.prompts[0]
-    assert "元宝搜索" in llm.prompts[0]
+    assert any("public_web_info" in prompt for prompt in llm.prompts)
+    assert any("元宝搜索" in prompt for prompt in llm.prompts)
     news = next(item for item in report.analysts if item.key == "news")
     assert news.data_sources == ["元宝搜索"]
 
@@ -265,3 +301,114 @@ async def test_web_results_feed_multiple_analysts():
 
     news = by_key["news"]
     assert news.data_sources == ["元宝搜索"]
+
+
+def analyst_reply(score: int = 78) -> dict:
+    return {
+        "score": score,
+        "rating": "乐观",
+        "summary": "LLM 版维度结论。",
+        "points": ["LLM 依据一", "LLM 依据二"],
+        "risks": ["LLM 风险一"],
+    }
+
+
+async def test_llm_analysts_replace_rule_drafts():
+    redis = FakeRedis()
+    user, quote, technical, bars = make_analysis("600016")
+    llm = FakeLLM([decision_reply()], analyst_reply=analyst_reply())
+
+    report = await generate_ai_analysis(
+        redis,
+        user.id,
+        user.daily_analysis_quota,
+        quote,
+        technical,
+        bars,
+        llm_client=llm,
+    )
+
+    assert llm.analyst_calls == 6
+    assert llm.decision_calls == 1
+    assert all(item.engine == "llm" for item in report.analysts)
+    assert all(item.score == 78 for item in report.analysts)
+    assert all(item.summary == "LLM 版维度结论。" for item in report.analysts)
+    # 风险维度的「乐观」不适用，按分数推导为低风险
+    risk = next(item for item in report.analysts if item.key == "risk")
+    assert risk.rating == "低风险"
+    # 决策 prompt 能看到每位分析师的 engine 标记
+    assert any('"engine":"llm"' in prompt for prompt in llm.prompts)
+
+
+async def test_single_analyst_failure_keeps_rule_draft():
+    redis = FakeRedis()
+    user, quote, technical, bars = make_analysis("600017")
+    llm = FakeLLM(
+        [decision_reply()],
+        analyst_reply=analyst_reply(),
+        fail_keys=("technical",),
+    )
+
+    report = await generate_ai_analysis(
+        redis,
+        user.id,
+        user.daily_analysis_quota,
+        quote,
+        technical,
+        bars,
+        llm_client=llm,
+    )
+
+    by_key = {item.key: item for item in report.analysts}
+    assert llm.analyst_calls == 6
+    assert by_key["technical"].engine == "rule"
+    assert all(item.engine == "llm" for key, item in by_key.items() if key != "technical")
+    assert report.decision is not None
+
+
+def test_missing_score_keeps_rule_score():
+    from app.schemas.analyst import AnalystDraft, AnalystReport
+    from app.services.llm_analyst_service import _merge_draft
+
+    rule = AnalystReport(key="technical", name="技术面", score=72, rating="乐观", summary="规则稿")
+    merged = _merge_draft(
+        rule, AnalystDraft.model_validate({"rating": "中性", "summary": "LLM 稿"})
+    )
+
+    assert merged.score == 72
+    assert merged.engine == "llm"
+    assert merged.summary == "LLM 稿"
+
+
+def test_analyst_prompt_serializes_dates():
+    from datetime import date
+
+    from app.llm.analyst_prompts import build_user_prompt
+
+    prompt = build_user_prompt({"period": {"report_date": date(2026, 9, 30)}})
+    assert "2026-09-30" in prompt
+
+
+async def test_progress_reports_analyst_completion():
+    redis = FakeRedis()
+    user, quote, technical, bars = make_analysis("600018")
+    llm = FakeLLM([decision_reply()], analyst_reply=analyst_reply())
+    phases: list[str] = []
+
+    async def progress(text: str) -> None:
+        phases.append(text)
+
+    await generate_ai_analysis(
+        redis,
+        user.id,
+        user.daily_analysis_quota,
+        quote,
+        technical,
+        bars,
+        llm_client=llm,
+        progress=progress,
+    )
+
+    assert phases[0] == "六位分析师分析中 0/6"
+    assert phases[1:7] == [f"六位分析师分析中 {done}/6" for done in range(1, 7)]
+    assert phases[-1] == "首席策略官汇总六份报告"

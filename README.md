@@ -120,13 +120,15 @@ LLM_BASE_URL=https://api.deepseek.com/v1
 LLM_API_KEY=你的 Key
 LLM_MODEL=deepseek-chat
 LLM_TIMEOUT_SECONDS=180
-LLM_JOB_TIMEOUT_SECONDS=420
-LLM_MAX_TOKENS=2048
+LLM_ANALYST_TIMEOUT_SECONDS=150
+LLM_ANALYST_CONCURRENCY=3
+LLM_JOB_TIMEOUT_SECONDS=600
+LLM_MAX_TOKENS=4096
 LLM_TEMPERATURE=0.3
 LLM_CACHE_SECONDS=21600
 ```
 
-> `LLM_TIMEOUT_SECONDS` 是单次 LLM 调用超时；`LLM_JOB_TIMEOUT_SECONDS` 是整个后台任务超时。推理型模型建议把 `LLM_MAX_TOKENS` 调大（思考过程也消耗 token）。
+> `LLM_TIMEOUT_SECONDS` 是单次调用超时；`LLM_ANALYST_TIMEOUT_SECONDS` 是每位分析师的超时；`LLM_JOB_TIMEOUT_SECONDS` 是整个后台任务超时。六位分析师按 `LLM_ANALYST_CONCURRENCY` 并发，免费/低配模型建议保持 3。推理型模型思考也消耗 token，`LLM_MAX_TOKENS` 不要低于 4096。
 
 改完重启后端。未配置时详情页会显示引导，不会发起 LLM 请求；配置后：
 - `GET /api/v1/ai/config` 返回 `configured=true` 与当前模型
@@ -134,7 +136,7 @@ LLM_CACHE_SECONDS=21600
 - 每次成功生成消耗 1 次 `daily_analysis_quota`；同股同交易日 + 同模型 + 同提示词版本 6 小时内直接复用，不重复消耗
 - 任务在后台执行，页面切走不会中断；重新点击会复用仍在运行的任务
 
-> 当前六位分析师的报告由代码基于真实数据生成，首席策略官由 LLM 汇总；不是参考项目那种 6 次独立 LLM 调用。这样成本更低、结果更可复现；需要 LLM 版分析师时可在 P4 后续逐位替换。
+> 一次分析会并发调用 6 位分析师（技术/基本面/资金面/风险/情绪/新闻），再由首席策略官汇总；单个分析师失败会自动回退到规则稿，并在报告中标记 `engine=rule`。整份报告仍只消耗 1 次额度。
 
 ---
 

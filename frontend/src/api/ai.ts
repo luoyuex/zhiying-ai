@@ -24,6 +24,8 @@ export interface AnalystReport {
   risks: string[]
   data_sources: string[]
   missing: string[]
+  /** 该位分析师最终稿来自 LLM 还是规则引擎 */
+  engine: 'llm' | 'rule'
 }
 
 export interface FinalDecision {

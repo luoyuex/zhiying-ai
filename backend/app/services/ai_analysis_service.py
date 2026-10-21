@@ -1,6 +1,7 @@
 """AI 多分析师报告：六维分析、首席决策、6 小时缓存与每日额度。"""
 
 import hashlib
+from collections.abc import Awaitable, Callable
 from datetime import datetime, time, timedelta
 from zoneinfo import ZoneInfo
 
@@ -19,6 +20,7 @@ from app.schemas.company import FinancialData, FundFlowData, SentimentData
 from app.schemas.search import WebSearchResult
 from app.services.analyst_service import build_analysts
 from app.services.decision_service import build_decision
+from app.services.llm_analyst_service import build_llm_analysts
 from app.services.web_search_service import sources_for_response
 
 logger = get_logger(__name__)
@@ -147,6 +149,7 @@ async def generate_ai_analysis(
     sentiment: SentimentData | None = None,
     web: WebSearchResult | None = None,
     llm_client: LLMClient | None = None,
+    progress: Callable[[str], Awaitable[None]] | None = None,
 ) -> AIAnalysisResponse:
     if llm_client is None:
         if not is_llm_configured():
@@ -177,7 +180,7 @@ async def generate_ai_analysis(
     if quota_used >= daily_quota:
         raise QuotaExceededError(daily_quota, _seconds_to_midnight())
 
-    analysts = build_analysts(
+    rule_analysts = build_analysts(
         quote,
         technical,
         financial,
@@ -186,6 +189,34 @@ async def generate_ai_analysis(
         web,
         bars,
     )
+
+    total = len(rule_analysts)
+    finished = 0
+
+    async def on_analyst_done(_: object) -> None:
+        nonlocal finished
+        finished += 1
+        if progress is not None:
+            await progress(f"六位分析师分析中 {finished}/{total}")
+
+    if progress is not None:
+        await progress(f"六位分析师分析中 0/{total}")
+
+    analysts = await build_llm_analysts(
+        llm_client,
+        quote,
+        technical,
+        bars,
+        rule_analysts,
+        financial=financial,
+        fund_flow=fund_flow,
+        sentiment=sentiment,
+        web=web,
+        on_done=on_analyst_done,
+    )
+
+    if progress is not None:
+        await progress("首席策略官汇总六份报告")
     decision = await build_decision(llm_client, quote, technical, analysts, web)
     headline = _headline_from_decision(decision, technical)
 

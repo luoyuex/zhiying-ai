@@ -64,12 +64,15 @@ class Settings(BaseSettings):
     llm_api_key: str = ""
     llm_model: str = "deepseek-chat"
     llm_timeout_seconds: int = 180
-    llm_job_timeout_seconds: int = 420
+    llm_analyst_timeout_seconds: int = 150
+    # 六位分析师并发上限：免费/低配模型下 3 路较稳，避免触发限流
+    llm_analyst_concurrency: int = 3
+    llm_job_timeout_seconds: int = 600
     llm_job_ttl_seconds: int = 3600
     llm_active_job_ttl_seconds: int = 900
     # 注意：推理型模型（如 sensenova-6.8）的思考过程也消耗 completion token，
-    # 900 会被思考吃光导致正文截断，JSON 解析必失败，因此放宽到 2048
-    llm_max_tokens: int = 2048
+    # 2048 在长上下文分析师 prompt 下仍会被思考吃光导致正文为空，因此放宽到 4096
+    llm_max_tokens: int = 4096
     llm_temperature: float = 0.3
     llm_cache_seconds: int = 21600
 

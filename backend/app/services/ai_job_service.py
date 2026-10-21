@@ -255,11 +255,18 @@ async def _run_job(
             if isinstance(result, BaseException):
                 logger.warning("六维数据获取失败 index=%s: %s", index, result)
 
+        # 六位分析师可能几乎同时完成，串行写状态避免进度回退
+        progress_lock = asyncio.Lock()
+
+        async def report_progress(text: str) -> None:
+            async with progress_lock:
+                await _update_state(redis, job_id, user_id, phase=text)
+
         await _update_state(
             redis,
             job_id,
             user_id,
-            phase="生成六分析师报告与首席决策",
+            phase="六位分析师分析中 0/6",
         )
         async with asyncio.timeout(settings.llm_job_timeout_seconds):
             result = await generate_ai_analysis(
@@ -273,6 +280,7 @@ async def _run_job(
                 fund_flow=fund_flow,
                 sentiment=sentiment,
                 web=web,
+                progress=report_progress,
             )
 
         try:

@@ -808,7 +808,21 @@ onBeforeUnmount(() => {
                   class="rounded-md border border-line bg-surface/40 p-3"
                 >
                   <div class="flex items-center justify-between gap-2">
-                    <span class="text-xs font-medium text-ink">{{ analyst.name }}</span>
+                    <span class="flex items-center gap-1.5">
+                      <span class="text-xs font-medium text-ink">{{ analyst.name }}</span>
+                      <span
+                        v-if="analyst.engine === 'llm'"
+                        class="rounded-full bg-primary-soft px-1.5 py-0.5 text-[10px] font-medium text-primary"
+                      >
+                        LLM
+                      </span>
+                      <span
+                        v-else
+                        class="rounded-full bg-surface-2 px-1.5 py-0.5 text-[10px] text-ink-3"
+                      >
+                        规则
+                      </span>
+                    </span>
                     <div class="flex items-center gap-2">
                       <span class="text-[11px] text-ink-3">{{ analyst.rating }}</span>
                       <span

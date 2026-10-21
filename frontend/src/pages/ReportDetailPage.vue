@@ -297,7 +297,21 @@ watch(
             class="rounded-lg border border-line bg-canvas p-4"
           >
             <div class="flex flex-wrap items-center justify-between gap-2">
-              <h3 class="text-[13px] font-medium text-ink">{{ analyst.name }}分析师</h3>
+              <div class="flex items-center gap-2">
+                <h3 class="text-[13px] font-medium text-ink">{{ analyst.name }}分析师</h3>
+                <span
+                  v-if="analyst.engine === 'llm'"
+                  class="rounded-full bg-primary-soft px-1.5 py-0.5 text-[10px] font-medium text-primary"
+                >
+                  LLM
+                </span>
+                <span
+                  v-else
+                  class="rounded-full bg-surface-2 px-1.5 py-0.5 text-[10px] text-ink-3"
+                >
+                  规则
+                </span>
+              </div>
               <div class="flex items-center gap-2">
                 <span class="text-[11px] text-ink-3">{{ analyst.rating }}</span>
                 <span class="text-[18px] font-semibold tabular-nums" :class="analystTone(analyst.score)">
