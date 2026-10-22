@@ -59,6 +59,42 @@ class LowPriceBullResponse(BaseModel):
     )
 
 
+class SmallCapRequest(BaseModel):
+    top_n: int = Field(default=5, ge=3, le=20)
+    max_market_cap: float = Field(default=50.0, gt=0, le=500)
+    min_profit_growth: float = Field(default=100.0, ge=0)
+    min_revenue_growth: float = Field(default=10.0, ge=0)
+    max_change_pct: float | None = Field(default=None, ge=-20, le=30)
+    exclude_st: bool = True
+    exclude_gem: bool = True
+    exclude_star: bool = True
+    exclude_bj: bool = True
+
+
+class SmallCapItem(BaseModel):
+    symbol: str
+    name: str
+    price: float | None = None
+    change_pct: float | None = None
+    total_market_cap: float | None = None
+    profit_growth: float | None = None
+    revenue_growth: float | None = None
+    report_date: str = ""
+
+
+class SmallCapResponse(BaseModel):
+    strategy: str = "small_cap"
+    items: list[SmallCapItem] = Field(default_factory=list)
+    scanned_count: int = 0
+    candidate_count: int = 0
+    fetched_at: datetime
+    source: str = "eastmoney_performance+tencent"
+    filters: dict = Field(default_factory=dict)
+    disclaimer: str = (
+        "选股结果基于公开业绩数据、行情与规则筛选，仅供研究参考，不构成投资建议。"
+    )
+
+
 class ScreenerStrategy(BaseModel):
     id: str
     name: str

@@ -14,11 +14,14 @@ from app.schemas.screener import (
     MainForceScreenRequest,
     MainForceScreenResponse,
     ScreenerStrategy,
+    SmallCapRequest,
+    SmallCapResponse,
 )
 from app.services.screener_service import (
     STRATEGIES,
     screen_low_price_bull,
     screen_main_force,
+    screen_small_cap,
 )
 
 router = APIRouter(prefix="/screener", tags=["选股"])
@@ -56,5 +59,20 @@ async def low_price_bull(
 ) -> LowPriceBullResponse:
     try:
         return await screen_low_price_bull(payload)
+    except (ProviderUnavailable, DataNotFound, ProviderSchemaDrift) as exc:
+        raise errors.market_unavailable() from exc
+
+
+@router.post(
+    "/small-cap",
+    response_model=SmallCapResponse,
+    summary="小市值（小盘 + 营收/净利增长）",
+)
+async def small_cap(
+    payload: SmallCapRequest,
+    _: User = Depends(get_current_user),
+) -> SmallCapResponse:
+    try:
+        return await screen_small_cap(payload)
     except (ProviderUnavailable, DataNotFound, ProviderSchemaDrift) as exc:
         raise errors.market_unavailable() from exc

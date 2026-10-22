@@ -19,9 +19,19 @@ class EastmoneyPerformanceProvider:
     REPORT_NAME = "RPT_LICO_FN_CPD"
     PAGE_SIZE = 500
 
-    async def fetch(self, min_profit_growth: float) -> tuple[str, list[PerformanceRow]]:
-        """返回（最新报告期, 满足净利增速阈值且为 A 股的记录）。"""
+    async def fetch(
+        self,
+        min_profit_growth: float,
+        min_revenue_growth: float = 0.0,
+    ) -> tuple[str, list[PerformanceRow]]:
+        """返回（最新报告期, 满足净利/营收增速阈值且为 A 股的记录）。"""
         report_date = await self.latest_report_date()
+        filter_text = (
+            f"(REPORTDATE='{report_date}')"
+            f"(SJLTZ>={min_profit_growth})"
+        )
+        if min_revenue_growth > 0:
+            filter_text += f"(YSTZ>={min_revenue_growth})"
         params = {
             "reportName": self.REPORT_NAME,
             "columns": (
@@ -31,10 +41,7 @@ class EastmoneyPerformanceProvider:
             "pageSize": self.PAGE_SIZE,
             "sortColumns": "SJLTZ",
             "sortTypes": -1,
-            "filter": (
-                f"(REPORTDATE='{report_date}')"
-                f"(SJLTZ>={min_profit_growth})"
-            ),
+            "filter": filter_text,
             "source": "WEB",
             "client": "WEB",
         }

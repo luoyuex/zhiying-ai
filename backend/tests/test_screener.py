@@ -18,6 +18,8 @@ from app.schemas.screener import (
     MainForceScreenRequest,
     MainForceScreenResponse,
     PerformanceRow,
+    SmallCapRequest,
+    SmallCapResponse,
 )
 from app.services import screener_service
 
@@ -223,7 +225,7 @@ def test_performance_parse_rows():
 
 
 class FakePerformanceProvider:
-    async def fetch(self, _min_growth: float):
+    async def fetch(self, _min_growth: float, _min_revenue: float = 0.0):
         return "2026-09-30", [
             PerformanceRow(
                 symbol="600798",
@@ -266,13 +268,19 @@ class FakePerformanceProvider:
         ]
 
 
-def make_quote(symbol: str, price: float, amount: float) -> Quote:
+def make_quote(
+    symbol: str,
+    price: float,
+    amount: float,
+    market_cap: float | None = None,
+) -> Quote:
     return Quote(
         symbol=symbol,
         name=f"测试{symbol}",
         price=price,
         change_pct=1.0,
         amount=amount,
+        total_market_cap=market_cap,
         source="test",
         fetched_at=now_shanghai(),
     )
@@ -342,5 +350,112 @@ async def test_low_price_bull_api_maps_market_error(monkeypatch):
             )
             assert response.status_code == 503
             assert response.json()["code"] == "MARKET_UNAVAILABLE"
+    finally:
+        app.dependency_overrides.clear()
+
+
+class FakeSmallCapProvider:
+    async def fetch(self, _min_profit: float, _min_revenue: float = 0.0):
+        return "2026-09-30", [
+            PerformanceRow(
+                symbol="600798",
+                name="宁波海运",
+                report_date="2026-09-30",
+                profit_growth=135.4,
+                revenue_growth=56.2,
+            ),
+            PerformanceRow(
+                symbol="002083",
+                name="孚日股份",
+                report_date="2026-09-30",
+                profit_growth=135.1,
+                revenue_growth=23.8,
+            ),
+            PerformanceRow(
+                symbol="002353",
+                name="杰瑞股份",
+                report_date="2026-09-30",
+                profit_growth=500.0,
+                revenue_growth=20.0,
+            ),
+            PerformanceRow(
+                symbol="301118",
+                name="恒光股份",
+                report_date="2026-09-30",
+                profit_growth=4845.1,
+                revenue_growth=30.0,
+            ),
+            PerformanceRow(
+                symbol="688779",
+                name="五矿新能",
+                report_date="2026-09-30",
+                profit_growth=2396.7,
+                revenue_growth=40.0,
+            ),
+            PerformanceRow(
+                symbol="600001",
+                name="ST测试",
+                report_date="2026-09-30",
+                profit_growth=300.0,
+                revenue_growth=50.0,
+            ),
+            PerformanceRow(
+                symbol="830799",
+                name="北交所测试",
+                report_date="2026-09-30",
+                profit_growth=200.0,
+                revenue_growth=20.0,
+            ),
+        ]
+
+
+async def test_small_cap_screen(monkeypatch):
+    async def fake_fetch_quotes(_symbols):
+        return {
+            "600798": make_quote("600798", 3.29, 52_436_307, 40e8),
+            "002083": make_quote("002083", 9.28, 45_240_099, 60e8),
+            "002353": make_quote("002353", 91.0, 66_488_017, 30e8),
+        }
+
+    monkeypatch.setattr(screener_service, "fetch_quotes", fake_fetch_quotes)
+
+    response = await screener_service.screen_small_cap(
+        SmallCapRequest(
+            top_n=5,
+            max_market_cap=50,
+            min_profit_growth=100,
+            min_revenue_growth=10,
+        ),
+        provider=FakeSmallCapProvider(),
+    )
+
+    assert response.scanned_count == 7
+    assert response.candidate_count == 2
+    assert [item.symbol for item in response.items] == ["002353", "600798"]
+    assert response.items[0].total_market_cap == 30e8
+    assert response.items[0].profit_growth == 500.0
+    assert response.filters["report_date"] == "2026-09-30"
+
+
+async def test_small_cap_api(monkeypatch):
+    user = User(id=uuid.uuid4(), email="smallcap@example.com", nickname="SmallCap")
+
+    async def fake_screen(_request):
+        return SmallCapResponse(
+            items=[],
+            scanned_count=0,
+            candidate_count=0,
+            fetched_at=datetime.now(),
+            filters={},
+        )
+
+    monkeypatch.setattr("app.api.v1.screener.screen_small_cap", fake_screen)
+    app.dependency_overrides[get_current_user] = lambda: user
+    try:
+        transport = ASGITransport(app=app)
+        async with AsyncClient(transport=transport, base_url="http://testserver") as client:
+            response = await client.post("/api/v1/screener/small-cap", json={"top_n": 5})
+            assert response.status_code == 200, response.text
+            assert response.json()["strategy"] == "small_cap"
     finally:
         app.dependency_overrides.clear()

@@ -72,6 +72,40 @@ export interface LowPriceBullResponse {
   disclaimer: string
 }
 
+export interface SmallCapRequest {
+  top_n: number
+  max_market_cap: number
+  min_profit_growth: number
+  min_revenue_growth: number
+  max_change_pct?: number | null
+  exclude_st: boolean
+  exclude_gem: boolean
+  exclude_star: boolean
+  exclude_bj: boolean
+}
+
+export interface SmallCapItem {
+  symbol: string
+  name: string
+  price: number | null
+  change_pct: number | null
+  total_market_cap: number | null
+  profit_growth: number | null
+  revenue_growth: number | null
+  report_date: string
+}
+
+export interface SmallCapResponse {
+  strategy: string
+  items: SmallCapItem[]
+  scanned_count: number
+  candidate_count: number
+  fetched_at: string
+  source: string
+  filters: Record<string, unknown>
+  disclaimer: string
+}
+
 export const screenerApi = {
   strategies() {
     return http.get<ScreenerStrategy[]>('/screener/strategies')
@@ -85,6 +119,12 @@ export const screenerApi = {
 
   lowPriceBull(payload: LowPriceBullRequest) {
     return http.post<LowPriceBullResponse>('/screener/low-price-bull', payload, {
+      timeout: 40000,
+    })
+  },
+
+  smallCap(payload: SmallCapRequest) {
+    return http.post<SmallCapResponse>('/screener/small-cap', payload, {
       timeout: 40000,
     })
   },

@@ -5,6 +5,7 @@ import { screenerApi, type ScreenerStrategy } from '@/api/screener'
 import AppShell from '@/components/layout/AppShell.vue'
 import LowPriceBullPanel from '@/components/screener/LowPriceBullPanel.vue'
 import MainForcePanel from '@/components/screener/MainForcePanel.vue'
+import SmallCapPanel from '@/components/screener/SmallCapPanel.vue'
 
 const strategies = ref<ScreenerStrategy[]>([
   {
@@ -18,6 +19,13 @@ const strategies = ref<ScreenerStrategy[]>([
     name: '低价擒牛',
     description:
       '股价 < 10 元 + 净利润同比 ≥ 100%，剔除 ST / 创业板 / 科创板，按成交额由小到大排名。',
+    status: 'available',
+  },
+  {
+    id: 'small_cap',
+    name: '小市值',
+    description:
+      '总市值 ≤ 50 亿 + 营收同比 ≥ 10% + 净利同比 ≥ 100%，剔除 ST / 创业板 / 科创板，按总市值升序。',
     status: 'available',
   },
 ])
@@ -82,12 +90,13 @@ onMounted(() => {
 
     <MainForcePanel v-if="activeStrategy === 'main_force'" class="mt-4" />
     <LowPriceBullPanel v-else-if="activeStrategy === 'low_price_bull'" class="mt-4" />
+    <SmallCapPanel v-else-if="activeStrategy === 'small_cap'" class="mt-4" />
 
     <div
       v-else
       class="mt-4 rounded-lg border border-dashed border-line bg-canvas px-4 py-14 text-center text-xs text-ink-3"
     >
-      该策略还在开发中，可先使用主力选股或低价擒牛。
+      该策略还在开发中，可先使用主力选股、低价擒牛或小市值。
     </div>
   </AppShell>
 </template>
