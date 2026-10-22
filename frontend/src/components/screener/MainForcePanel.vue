@@ -1,99 +1,86 @@
 <script setup lang="ts">
 import { ref } from 'vue'
 
-import { screenerApi, type MainForceScreenResponse } from '@/api/screener'
-import { getErrorMessage } from '@/utils/errors'
-import { formatDateTime } from '@/utils/report'
-import ScreenerResults from './ScreenerResults.vue'
-import type { ScreenerDisplayItem } from './types'
+import { type MainForceAnalysisRequest } from '@/api/screener'
+import Select from '@/components/ui/Select.vue'
+import ScreenerAIResult from './ScreenerAIResult.vue'
+import ScreenerHistory from './ScreenerHistory.vue'
+import ScreenerJobLoading from './ScreenerJobLoading.vue'
+import ScreenerRecordDrawer from './ScreenerRecordDrawer.vue'
+import { useScreenerAI } from './useScreenerAI'
 
-const topN = ref(10)
+const FINAL_N_OPTIONS = [
+  { label: '3 只', value: 3 },
+  { label: '5 只', value: 5 },
+  { label: '10 只', value: 10 },
+]
+
+const finalN = ref(5)
 const maxChangePct = ref<string | number>('7')
 const excludeST = ref(true)
 const excludeGEM = ref(true)
 const excludeSTAR = ref(true)
 
-const loading = ref(false)
-const error = ref('')
-const result = ref<MainForceScreenResponse | null>(null)
-const displayItems = ref<ScreenerDisplayItem[]>([])
-
-function formatAmount(value: number): string {
-  const abs = Math.abs(value)
-  if (abs >= 1e8) return `${(value / 1e8).toFixed(2)} 亿`
-  if (abs >= 1e4) return `${(value / 1e4).toFixed(0)} 万`
-  return value.toFixed(0)
-}
-
-function netTone(value: number): string {
-  if (value > 0) return 'text-up'
-  if (value < 0) return 'text-down'
-  return 'text-ink-2'
-}
-
-function toDisplay(data: MainForceScreenResponse): ScreenerDisplayItem[] {
-  return data.items.map((item) => ({
-    symbol: item.symbol,
-    name: item.name,
-    price: item.price,
-    change_pct: item.change_pct,
-    metrics: [
-      {
-        label: '主力净额',
-        value: formatAmount(item.main_net),
-        tone: netTone(item.main_net),
-      },
-      {
-        label: '净占比',
-        value:
-          item.main_net_pct === null ? '—' : `${item.main_net_pct.toFixed(2)}%`,
-        tone: netTone(item.main_net_pct ?? 0),
-      },
-    ],
-  }))
-}
-
-async function run(): Promise<void> {
-  if (loading.value) return
-  loading.value = true
-  error.value = ''
-  result.value = null
-  displayItems.value = []
-  try {
-    const maxText = String(maxChangePct.value).trim()
-    const { data } = await screenerApi.mainForce({
-      top_n: topN.value,
-      max_change_pct: maxText === '' ? null : Number(maxText),
-      exclude_st: excludeST.value,
-      exclude_gem: excludeGEM.value,
-      exclude_star: excludeSTAR.value,
-      exclude_bj: true,
-    })
-    result.value = data
-    displayItems.value = toDisplay(data)
-  } catch (err) {
-    error.value = getErrorMessage(err, '选股失败，请稍后重试')
-  } finally {
-    loading.value = false
+function applyFilters(filters: Record<string, unknown>): void {
+  const finalNValue = Number(filters.final_n)
+  if (FINAL_N_OPTIONS.some((option) => option.value === finalNValue)) {
+    finalN.value = finalNValue
   }
+  if ('max_change_pct' in filters) {
+    const value = filters.max_change_pct
+    maxChangePct.value = value === null || value === undefined ? '' : String(value)
+  }
+  if (typeof filters.exclude_st === 'boolean') excludeST.value = filters.exclude_st
+  if (typeof filters.exclude_gem === 'boolean') excludeGEM.value = filters.exclude_gem
+  if (typeof filters.exclude_star === 'boolean') excludeSTAR.value = filters.exclude_star
+}
+
+const {
+  loading,
+  restoring,
+  error,
+  analysis,
+  job,
+  records,
+  recordsLoading,
+  recordsError,
+  activeRecordId,
+  detailOpen,
+  detailLoading,
+  detailError,
+  detailRecord,
+  detailRecordId,
+  run,
+  openRecordDetail,
+  closeRecordDetail,
+} = useScreenerAI({ strategy: 'main_force', applyFilters })
+
+function runSelection(): void {
+  const maxText = String(maxChangePct.value).trim()
+  const payload: MainForceAnalysisRequest = {
+    final_n: finalN.value,
+    max_change_pct: maxText === '' ? null : Number(maxText),
+    exclude_st: excludeST.value,
+    exclude_gem: excludeGEM.value,
+    exclude_star: excludeSTAR.value,
+    exclude_bj: true,
+  }
+  void run(payload)
 }
 </script>
 
 <template>
   <div>
-    <form class="rounded-lg border border-line bg-canvas p-4" @submit.prevent="run">
+    <form class="rounded-lg border border-line bg-canvas p-4" @submit.prevent="runSelection">
       <div class="flex flex-wrap items-end gap-3">
-        <label class="flex flex-col gap-1 text-[11px] text-ink-3">
-          精选数量
-          <select
-            v-model.number="topN"
-            class="h-9 rounded-md border border-line bg-canvas px-2.5 text-xs text-ink focus:border-line-strong focus:outline-none"
-          >
-            <option :value="5">5 只</option>
-            <option :value="10">10 只</option>
-            <option :value="20">20 只</option>
-          </select>
-        </label>
+        <div class="flex flex-col gap-1 text-[11px] text-ink-3">
+          最终精选数量
+          <Select
+            v-model="finalN"
+            :options="FINAL_N_OPTIONS"
+            :disabled="loading || restoring"
+          />
+        </div>
 
         <label class="flex flex-col gap-1 text-[11px] text-ink-3">
           最大涨幅（%）
@@ -102,29 +89,45 @@ async function run(): Promise<void> {
             type="number"
             step="0.1"
             placeholder="不限制"
-            class="h-9 w-24 rounded-md border border-line bg-canvas px-2.5 text-xs text-ink placeholder:text-ink-3 focus:border-line-strong focus:outline-none"
+            :disabled="loading || restoring"
+            class="h-9 w-24 rounded-md border border-line bg-canvas px-2.5 text-xs text-ink placeholder:text-ink-3 focus:border-line-strong focus:outline-none disabled:cursor-not-allowed disabled:bg-surface-2"
           />
         </label>
 
         <label class="flex h-9 cursor-pointer items-center gap-1.5 text-xs text-ink-2">
-          <input v-model="excludeST" type="checkbox" class="size-3.5 accent-ink" />
+          <input
+            v-model="excludeST"
+            type="checkbox"
+            :disabled="loading || restoring"
+            class="size-3.5 accent-ink"
+          />
           排除 ST
         </label>
         <label class="flex h-9 cursor-pointer items-center gap-1.5 text-xs text-ink-2">
-          <input v-model="excludeGEM" type="checkbox" class="size-3.5 accent-ink" />
+          <input
+            v-model="excludeGEM"
+            type="checkbox"
+            :disabled="loading || restoring"
+            class="size-3.5 accent-ink"
+          />
           排除创业板
         </label>
         <label class="flex h-9 cursor-pointer items-center gap-1.5 text-xs text-ink-2">
-          <input v-model="excludeSTAR" type="checkbox" class="size-3.5 accent-ink" />
+          <input
+            v-model="excludeSTAR"
+            type="checkbox"
+            :disabled="loading || restoring"
+            class="size-3.5 accent-ink"
+          />
           排除科创板
         </label>
 
         <button
           type="submit"
           class="ml-auto h-9 rounded-md border border-ink bg-ink px-4 text-xs text-canvas transition-opacity hover:opacity-80 disabled:cursor-not-allowed disabled:opacity-40"
-          :disabled="loading"
+          :disabled="loading || restoring"
         >
-          {{ loading ? '筛选中…' : '开始筛选' }}
+          {{ loading ? 'AI 选股中…' : '开始 AI 选股' }}
         </button>
       </div>
     </form>
@@ -136,51 +139,47 @@ async function run(): Promise<void> {
       {{ error }}
     </div>
 
-    <div
-      v-if="loading"
-      class="mt-4 rounded-lg border border-line bg-canvas px-4 py-12 text-center text-xs text-ink-3"
-    >
-      <span
-        class="mx-auto mb-3 block size-5 animate-spin rounded-full border-2 border-ink-3/25 border-t-ink-3"
-      />
-      正在拉取资金流排行并筛选…
-    </div>
+    <ScreenerJobLoading
+      v-if="loading || restoring"
+      class="mt-4"
+      :restoring="restoring"
+      :phase="job?.phase || ''"
+      :elapsed="job?.elapsed_seconds || 0"
+    />
 
-    <section v-else-if="result" class="mt-6">
-      <div class="mb-3 flex flex-wrap items-end justify-between gap-3">
-        <div>
-          <h2 class="text-sm font-semibold text-ink">
-            候选标的 {{ result.items.length }}
-            <span class="ml-1 text-[11px] font-normal text-ink-3">
-              / 命中 {{ result.candidate_count }} · 扫描 {{ result.scanned_count }}
-            </span>
-          </h2>
-          <p class="mt-1 text-[11px] text-ink-3">
-            {{ result.source }} · {{ formatDateTime(result.fetched_at) }}
-          </p>
-        </div>
-      </div>
-
-      <ScreenerResults v-if="displayItems.length" :items="displayItems" />
-
-      <div
-        v-else
-        class="rounded-lg border border-dashed border-line bg-canvas px-4 py-12 text-center text-xs text-ink-3"
-      >
-        当前条件下没有符合条件的标的，可放宽涨幅上限或减少排除项。
-      </div>
-
-      <p class="mt-3 text-[10px] leading-relaxed text-ink-3">{{ result.disclaimer }}</p>
-    </section>
+    <ScreenerAIResult
+      v-else-if="analysis"
+      class="mt-6"
+      :analysis="analysis"
+      strategy="main_force"
+    />
 
     <div
-      v-else-if="!loading"
+      v-else
       class="mt-4 rounded-lg border border-dashed border-line bg-canvas px-4 py-12 text-center"
     >
-      <div class="text-sm font-medium text-ink">按主力资金筛选</div>
-      <p class="mt-1 text-xs text-ink-3">
-        取超大单净流入排名前 300 只，过滤 ST / 创业板 / 科创板与涨幅过高的标的。
+      <div class="text-sm font-medium text-ink">AI 主力追踪</div>
+      <p class="mx-auto mt-1 max-w-xl text-xs leading-relaxed text-ink-3">
+        系统先从主力资金净流入靠前的标的中圈定候选，再由资金流向、行业板块、财务基本面三位分析师整体分析，最后交给资深研究员精选，只呈现 AI 认可的标的。
       </p>
     </div>
+
+    <ScreenerHistory
+      class="mt-4"
+      :records="records"
+      :loading="recordsLoading"
+      :error="recordsError"
+      :active-record-id="activeRecordId"
+      :detail-record-id="detailRecordId"
+      @view="openRecordDetail"
+    />
+
+    <ScreenerRecordDrawer
+      :open="detailOpen"
+      :record="detailRecord"
+      :loading="detailLoading"
+      :error="detailError"
+      @close="closeRecordDetail"
+    />
   </div>
 </template>

@@ -35,7 +35,8 @@ class EastmoneyPerformanceProvider:
         params = {
             "reportName": self.REPORT_NAME,
             "columns": (
-                "SECURITY_CODE,SECURITY_NAME_ABBR,REPORTDATE,YSTZ,SJLTZ"
+                "SECURITY_CODE,SECURITY_NAME_ABBR,REPORTDATE,YSTZ,SJLTZ,"
+                "PUBLISHNAME,BOARD_NAME"
             ),
             "pageNumber": 1,
             "pageSize": self.PAGE_SIZE,
@@ -76,6 +77,38 @@ class EastmoneyPerformanceProvider:
             raise DataNotFound("东财业绩报表无报告期")
         return str(rows[0].get("REPORTDATE") or "")[:10]
 
+    async def fetch_latest_by_codes(
+        self,
+        codes: list[str],
+    ) -> dict[str, PerformanceRow]:
+        """一次查询多只股票的最新一期业绩（用于 AI 分析的行业/增速补充）。"""
+        if not codes:
+            return {}
+        joined = ",".join(f'"{code}"' for code in codes)
+        params = {
+            "reportName": self.REPORT_NAME,
+            "columns": (
+                "SECURITY_CODE,SECURITY_NAME_ABBR,REPORTDATE,YSTZ,SJLTZ,"
+                "PUBLISHNAME,BOARD_NAME"
+            ),
+            "pageNumber": 1,
+            "pageSize": min(500, max(120, len(codes) * 4)),
+            "sortColumns": "REPORTDATE",
+            "sortTypes": -1,
+            "filter": f"(SECURITY_CODE in ({joined}))",
+            "source": "WEB",
+            "client": "WEB",
+        }
+        response = await fetch(self.URL, params=params)
+        try:
+            payload = response.json()
+        except ValueError as exc:
+            raise ProviderSchemaDrift("东财业绩报表返回非 JSON") from exc
+        latest: dict[str, PerformanceRow] = {}
+        for row in self.parse_rows(payload):
+            latest.setdefault(row.symbol, row)
+        return latest
+
     @classmethod
     def parse_rows(cls, payload: dict) -> list[PerformanceRow]:
         items: list[PerformanceRow] = []
@@ -93,6 +126,9 @@ class EastmoneyPerformanceProvider:
                     report_date=str(raw.get("REPORTDATE") or "")[:10],
                     profit_growth=safe_float(raw.get("SJLTZ")),
                     revenue_growth=safe_float(raw.get("YSTZ")),
+                    industry=str(
+                        raw.get("BOARD_NAME") or raw.get("PUBLISHNAME") or ""
+                    ).strip(),
                 )
             )
         return items

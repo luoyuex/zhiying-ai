@@ -17,6 +17,7 @@ from app.services.ai_job_service import (
     WORKER_HEARTBEAT_KEY,
     run_ai_job_task,
 )
+from app.services.screener_job_service import run_screener_job_task
 
 logger = get_logger(__name__)
 
@@ -32,6 +33,19 @@ async def run_ai_job(
     force: bool = False,
 ) -> None:
     await run_ai_job_task(ctx["redis"], job_id, user_id, daily_quota, symbol, force)
+
+
+async def run_screener_job(
+    ctx: dict,
+    job_id: str,
+    user_id: str,
+    daily_quota: int,
+    strategy: str,
+    filters: dict,
+) -> None:
+    await run_screener_job_task(
+        ctx["redis"], job_id, user_id, daily_quota, strategy, filters
+    )
 
 
 async def worker_heartbeat(ctx: dict) -> None:
@@ -53,7 +67,7 @@ async def on_shutdown(ctx: dict) -> None:
 
 
 class WorkerSettings:
-    functions = [run_ai_job]
+    functions = [run_ai_job, run_screener_job]
     cron_jobs = [cron(worker_heartbeat, second={0, 30}, run_at_startup=True)]
     redis_settings = RedisSettings.from_dsn(settings.redis_url)
     on_startup = on_startup

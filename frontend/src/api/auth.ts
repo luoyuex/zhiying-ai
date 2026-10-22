@@ -33,4 +33,15 @@ export const authApi = {
   me() {
     return http.get<User>('/auth/me')
   },
+
+  updateProfile(payload: { nickname: string }) {
+    return http.patch<User>('/auth/me', payload)
+  },
+
+  changePassword(payload: { current_password: string; new_password: string }) {
+    return http.post<{ ok: boolean; message: string }>(
+      '/auth/password/change',
+      payload,
+    )
+  },
 }

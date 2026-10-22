@@ -3,12 +3,14 @@ import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 
 import { useAuthStore } from '@/stores/auth'
+import AccountCenterModal from './AccountCenterModal.vue'
 
 const auth = useAuthStore()
 const route = useRoute()
 const router = useRouter()
 
 const menuOpen = ref(false)
+const accountOpen = ref(false)
 const menuRoot = ref<HTMLElement | null>(null)
 
 interface NavItem {
@@ -18,7 +20,7 @@ interface NavItem {
 }
 
 const NAV_ITEMS: NavItem[] = [
-  { label: '工作台', to: '/', active: (path) => path === '/' },
+  { label: '首页', to: '/', active: (path) => path === '/' },
   { label: '选股', to: '/screener', active: (path) => path.startsWith('/screener') },
   { label: '自选股', to: '/watchlist', active: (path) => path.startsWith('/watchlist') },
   { label: '历史报告', to: '/reports', active: (path) => path.startsWith('/reports') },
@@ -32,6 +34,11 @@ const avatarText = computed(() => auth.user?.nickname?.trim().slice(0, 1) || '�
 
 function closeMenu(): void {
   menuOpen.value = false
+}
+
+function openAccount(): void {
+  closeMenu()
+  accountOpen.value = true
 }
 
 function onDocumentPointerDown(event: PointerEvent): void {
@@ -158,6 +165,26 @@ watch(
               </div>
 
               <div class="p-1.5">
+                <button
+                  type="button"
+                  role="menuitem"
+                  class="flex w-full items-center gap-2.5 rounded-md px-2.5 py-2 text-left text-[13px] text-ink-2 transition-colors hover:bg-surface hover:text-ink"
+                  @click="openAccount"
+                >
+                  <svg
+                    class="size-4 shrink-0"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="1.7"
+                    aria-hidden="true"
+                  >
+                    <circle cx="12" cy="8" r="3.5" />
+                    <path d="M5 20a7 7 0 0 1 14 0" stroke-linecap="round" />
+                  </svg>
+                  个人中心
+                </button>
+
                 <RouterLink
                   to="/"
                   role="menuitem"
@@ -177,7 +204,7 @@ watch(
                     <rect x="3" y="14" width="7" height="7" rx="1.5" />
                     <rect x="14" y="14" width="7" height="7" rx="1.5" />
                   </svg>
-                  工作台
+                  首页
                 </RouterLink>
 
                 <RouterLink
@@ -254,5 +281,7 @@ watch(
     <main class="mx-auto max-w-[1280px] px-4 py-6 sm:px-6 sm:py-8">
       <slot />
     </main>
+
+    <AccountCenterModal v-model="accountOpen" />
   </div>
 </template>

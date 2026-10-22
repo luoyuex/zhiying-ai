@@ -69,7 +69,7 @@ onMounted(() => {
       class="inline-flex items-center gap-1 text-xs text-ink-3 transition-colors hover:text-ink"
     >
       <span aria-hidden="true">←</span>
-      返回工作台
+      返回首页
     </RouterLink>
 
     <section class="mt-4 flex flex-wrap items-end justify-between gap-4">

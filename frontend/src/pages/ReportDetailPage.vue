@@ -36,7 +36,7 @@ const originSymbol = computed(
 )
 
 const backLink = computed(() => {
-  if (origin.value === 'dashboard') return { to: '/', label: '返回工作台' }
+  if (origin.value === 'dashboard') return { to: '/', label: '返回首页' }
   if (origin.value === 'reports') return { to: '/reports', label: '返回全部历史报告' }
   if (origin.value === 'watchlist') return { to: '/watchlist', label: '返回自选股' }
   if (originSymbol.value) {
@@ -45,7 +45,7 @@ const backLink = computed(() => {
       label: report.value ? `返回 ${report.value.name} 行情` : '返回个股行情',
     }
   }
-  return { to: '/', label: '返回工作台' }
+  return { to: '/', label: '返回首页' }
 })
 
 const decision = computed(() => report.value?.decision ?? null)
@@ -228,8 +228,6 @@ watch(
           </div>
         </div>
         <div class="text-right text-[11px] leading-relaxed text-ink-3">
-          <div>{{ report.model }}</div>
-          <div>{{ report.prompt_version }}</div>
           <div>报价时间 {{ formatQuoteTime(report.data_as_of) }}</div>
           <div>数据源 {{ dataSourceText }}</div>
         </div>

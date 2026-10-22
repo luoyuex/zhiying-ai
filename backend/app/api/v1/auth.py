@@ -8,6 +8,7 @@ from app.db.models.user import User
 from app.db.redis import get_redis
 from app.schemas.auth import (
     AuthResponse,
+    ChangePasswordRequest,
     CodeLoginRequest,
     LoginRequest,
     OkResponse,
@@ -16,6 +17,7 @@ from app.schemas.auth import (
     ResetPasswordRequest,
     SendCodeRequest,
     SendCodeResponse,
+    UpdateProfileRequest,
     UserOut,
 )
 from app.services import auth_service
@@ -172,3 +174,28 @@ async def logout(
 @router.get("/me", response_model=UserOut, summary="当前登录用户")
 async def me(user: User = Depends(get_current_user)) -> UserOut:
     return UserOut.model_validate(user)
+
+
+@router.patch("/me", response_model=UserOut, summary="编辑个人资料")
+async def update_me(
+    payload: UpdateProfileRequest,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> UserOut:
+    updated = await auth_service.update_profile(db, user, payload.nickname)
+    return UserOut.model_validate(updated)
+
+
+@router.post("/password/change", response_model=OkResponse, summary="修改密码")
+async def change_password(
+    payload: ChangePasswordRequest,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> OkResponse:
+    await auth_service.change_password(
+        db,
+        user,
+        payload.current_password,
+        payload.new_password,
+    )
+    return OkResponse(message="密码已修改，请重新登录")

@@ -43,7 +43,6 @@ const to = computed(() => ({
       </div>
       <div class="mt-0.5 flex flex-wrap gap-x-2 gap-y-0.5 text-[11px] text-ink-3">
         <span>{{ sourceLabel(item.decision_source) }}</span>
-        <span class="truncate">{{ item.model }}</span>
       </div>
     </div>
 

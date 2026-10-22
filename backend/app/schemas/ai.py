@@ -136,6 +136,7 @@ class AIJobState(BaseModel):
     status: AIJobStatus
     symbol: str
     phase: str
+    force: bool = False
     created_at: datetime
     updated_at: datetime
     elapsed_seconds: int = 0

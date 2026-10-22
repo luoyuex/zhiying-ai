@@ -5,31 +5,61 @@ import { screenerApi, type ScreenerStrategy } from '@/api/screener'
 import AppShell from '@/components/layout/AppShell.vue'
 import LowPriceBullPanel from '@/components/screener/LowPriceBullPanel.vue'
 import MainForcePanel from '@/components/screener/MainForcePanel.vue'
+import ProfitGrowthPanel from '@/components/screener/ProfitGrowthPanel.vue'
 import SmallCapPanel from '@/components/screener/SmallCapPanel.vue'
+import ValueStockPanel from '@/components/screener/ValueStockPanel.vue'
 
 const strategies = ref<ScreenerStrategy[]>([
   {
     id: 'main_force',
-    name: '主力选股',
-    description: '按超大单净流入排名筛选，剔除 ST / 创业板 / 科创板，可过滤涨幅过高的标的。',
+    name: '主力追踪',
+    description:
+      'AI 三位分析师（资金流向 / 行业板块 / 财务基本面）分析主力资金靠前标的，由资深研究员精选最终结果。',
     status: 'available',
   },
   {
     id: 'low_price_bull',
-    name: '低价擒牛',
+    name: '低价寻宝',
     description:
-      '股价 < 10 元 + 净利润同比 ≥ 100%，剔除 ST / 创业板 / 科创板，按成交额由小到大排名。',
+      'AI 三位分析师（资金与流动性 / 行业板块 / 业绩成长）分析低价、高净利增长标的，由资深研究员精选最终结果。',
     status: 'available',
   },
   {
     id: 'small_cap',
-    name: '小市值',
+    name: '小盘精选',
     description:
-      '总市值 ≤ 50 亿 + 营收同比 ≥ 10% + 净利同比 ≥ 100%，剔除 ST / 创业板 / 科创板，按总市值升序。',
+      'AI 三位分析师（资金与流动性 / 行业板块 / 成长与估值）分析小市值、高增长标的，由资深研究员精选最终结果。',
+    status: 'available',
+  },
+  {
+    id: 'profit_growth',
+    name: '业绩高增',
+    description:
+      'AI 三位分析师（资金与流动性 / 行业板块 / 成长质量）分析高净利增长标的，由资深研究员精选最终结果。',
+    status: 'available',
+  },
+  {
+    id: 'value_stock',
+    name: '价值洼地',
+    description:
+      'AI 三位分析师（资金与流动性 / 行业板块 / 估值质量）分析低 PE/PB、近 12 个月高股息、最新报告期低负债标的，由资深研究员精选最终结果。',
     status: 'available',
   },
 ])
 const activeStrategy = ref('main_force')
+
+const STRATEGY_STORAGE_KEY = 'zhiying:screener:strategy'
+const AVAILABLE_STRATEGIES = [
+  'main_force',
+  'low_price_bull',
+  'small_cap',
+  'profit_growth',
+  'value_stock',
+]
+const savedStrategy = localStorage.getItem(STRATEGY_STORAGE_KEY)
+if (savedStrategy && AVAILABLE_STRATEGIES.includes(savedStrategy)) {
+  activeStrategy.value = savedStrategy
+}
 
 const activeMeta = computed(
   () => strategies.value.find((item) => item.id === activeStrategy.value) ?? null,
@@ -38,6 +68,7 @@ const activeMeta = computed(
 function selectStrategy(strategy: ScreenerStrategy): void {
   if (strategy.status !== 'available') return
   activeStrategy.value = strategy.id
+  localStorage.setItem(STRATEGY_STORAGE_KEY, strategy.id)
 }
 
 async function loadStrategies(): Promise<void> {
@@ -58,7 +89,9 @@ onMounted(() => {
   <AppShell>
     <section class="flex flex-wrap items-end justify-between gap-4">
       <div>
-        <p class="text-[13px] text-ink-3">按策略筛选 A 股，并可直接发起 AI 分析</p>
+        <p class="text-[13px] text-ink-3">
+          策略圈定候选，AI 三位分析师与资深研究员给出最终选择
+        </p>
         <h1 class="mt-1 text-[24px] font-semibold tracking-tight text-ink">选股</h1>
       </div>
     </section>
@@ -91,12 +124,14 @@ onMounted(() => {
     <MainForcePanel v-if="activeStrategy === 'main_force'" class="mt-4" />
     <LowPriceBullPanel v-else-if="activeStrategy === 'low_price_bull'" class="mt-4" />
     <SmallCapPanel v-else-if="activeStrategy === 'small_cap'" class="mt-4" />
+    <ProfitGrowthPanel v-else-if="activeStrategy === 'profit_growth'" class="mt-4" />
+    <ValueStockPanel v-else-if="activeStrategy === 'value_stock'" class="mt-4" />
 
     <div
       v-else
       class="mt-4 rounded-lg border border-dashed border-line bg-canvas px-4 py-14 text-center text-xs text-ink-3"
     >
-      该策略还在开发中，可先使用主力选股、低价擒牛或小市值。
+      该策略还在开发中，可先使用主力追踪、低价寻宝或小盘精选。
     </div>
   </AppShell>
 </template>

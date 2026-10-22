@@ -87,16 +87,23 @@ class LLMClient:
             )
         self._client = client
 
-    async def generate_json(self, system_prompt: str, user_prompt: str) -> dict[str, Any]:
+    async def _complete(
+        self,
+        system_prompt: str,
+        user_prompt: str,
+        max_tokens: int | None = None,
+        timeout: float | None = None,
+    ) -> str:
+        client = self._client.with_options(timeout=timeout) if timeout else self._client
         try:
-            response = await self._client.chat.completions.create(
+            response = await client.chat.completions.create(
                 model=settings.llm_model,
                 messages=[
                     {"role": "system", "content": system_prompt},
                     {"role": "user", "content": user_prompt},
                 ],
                 temperature=settings.llm_temperature,
-                max_tokens=settings.llm_max_tokens,
+                max_tokens=max_tokens or settings.llm_max_tokens,
             )
         except openai.RateLimitError as exc:
             logger.warning("LLM 限流: %s", exc)
@@ -110,12 +117,43 @@ class LLMClient:
 
         if not response.choices:
             raise LLMResponseError("LLM 未返回候选结果")
-        content = response.choices[0].message.content or ""
+        choice = response.choices[0]
+        content = choice.message.content or ""
         usage = response.usage
+        finish_reason = getattr(choice, "finish_reason", None)
         logger.info(
-            "LLM 调用完成 model=%s prompt_tokens=%s completion_tokens=%s",
+            "LLM 调用完成 model=%s prompt_tokens=%s completion_tokens=%s finish_reason=%s",
             response.model,
             getattr(usage, "prompt_tokens", None),
             getattr(usage, "completion_tokens", None),
+            finish_reason,
         )
-        return extract_json(content)
+        if not content and finish_reason == "length":
+            raise LLMResponseError("LLM 思考过程耗尽 token，未输出正文")
+        return content
+
+    async def generate_json(
+        self,
+        system_prompt: str,
+        user_prompt: str,
+        max_tokens: int | None = None,
+        timeout: float | None = None,
+    ) -> dict[str, Any]:
+        return extract_json(
+            await self._complete(system_prompt, user_prompt, max_tokens, timeout)
+        )
+
+    async def generate_text(
+        self,
+        system_prompt: str,
+        user_prompt: str,
+        max_tokens: int | None = None,
+        timeout: float | None = None,
+    ) -> str:
+        """用于长文分析报告（不做 JSON 解析）。"""
+        text = (
+            await self._complete(system_prompt, user_prompt, max_tokens, timeout)
+        ).strip()
+        if not text:
+            raise LLMResponseError("LLM 返回为空")
+        return text

@@ -93,7 +93,7 @@ function actionTone(action: string): string {
             />
           </div>
           <div class="mt-2 text-[11px] leading-relaxed text-ink-3">
-            {{ formatDateTime(diagnosis.generated_at) }} · {{ diagnosis.model }}
+            {{ formatDateTime(diagnosis.generated_at) }}
           </div>
         </div>
 

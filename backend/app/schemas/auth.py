@@ -105,6 +105,28 @@ class ResetPasswordRequest(_PasswordMixin):
         return value
 
 
+class UpdateProfileRequest(BaseModel):
+    nickname: str = Field(min_length=2, max_length=20)
+
+    @field_validator("nickname")
+    @classmethod
+    def strip_nickname(cls, value: str) -> str:
+        value = value.strip()
+        if not value:
+            raise ValueError("昵称不能为空")
+        return value
+
+
+class ChangePasswordRequest(_PasswordMixin):
+    current_password: str = Field(min_length=1, max_length=64)
+    new_password: str = Field(min_length=8, max_length=64)
+
+    @field_validator("new_password")
+    @classmethod
+    def check_new_password(cls, value: str) -> str:
+        return cls._ensure_strength(value)
+
+
 class UserOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 

@@ -28,7 +28,7 @@ const router = createRouter({
       path: '/',
       name: 'dashboard',
       component: () => import('@/pages/DashboardPage.vue'),
-      meta: { requiresAuth: true, title: '工作台' },
+      meta: { requiresAuth: true, title: '首页' },
     },
     {
       path: '/screener',

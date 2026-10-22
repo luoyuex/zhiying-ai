@@ -1,4 +1,4 @@
-/** 报告列表的格式化与配色：历史页、工作台共用 */
+/** 报告列表的格式化与配色：历史页、首页共用 */
 
 export function formatTime(iso: string): string {
   return new Date(iso).toLocaleTimeString('zh-CN', {
@@ -14,6 +14,12 @@ export function formatDateTime(iso: string): string {
     hour: '2-digit',
     minute: '2-digit',
   })
+}
+
+export function formatFullDateTime(iso: string): string {
+  const date = new Date(iso)
+  const pad = (value: number) => String(value).padStart(2, '0')
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())} ${pad(date.getHours())}:${pad(date.getMinutes())}`
 }
 
 export function ratingTone(rating: string): string {

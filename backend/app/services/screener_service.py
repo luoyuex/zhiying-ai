@@ -1,6 +1,7 @@
 """选股服务：主力资金排行筛选。"""
 
 import json
+from dataclasses import dataclass
 from datetime import datetime
 from typing import Protocol
 from zoneinfo import ZoneInfo
@@ -27,6 +28,8 @@ from app.schemas.screener import (
     MainForceScreenRequest,
     MainForceScreenResponse,
     PerformanceRow,
+    ProfitGrowthAnalysisRequest,
+    ProfitGrowthItem,
     ScreenerStrategy,
     SmallCapItem,
     SmallCapRequest,
@@ -43,36 +46,43 @@ RANK_LIMIT = 300
 STRATEGIES = [
     ScreenerStrategy(
         id="main_force",
-        name="主力选股",
-        description="按超大单净流入排名筛选，剔除 ST / 创业板 / 科创板，可过滤涨幅过高的标的。",
+        name="主力追踪",
+        description=(
+            "AI 三位分析师（资金流向 / 行业板块 / 财务基本面）分析主力资金靠前标的，"
+            "由资深研究员精选最终结果。"
+        ),
     ),
     ScreenerStrategy(
         id="low_price_bull",
-        name="低价擒牛",
+        name="低价寻宝",
         description=(
-            "股价 < 10 元 + 净利润同比 ≥ 100%，剔除 ST / 创业板 / 科创板，"
-            "按成交额由小到大排名。"
+            "AI 三位分析师（资金与流动性 / 行业板块 / 业绩成长）分析低价、高净利增长标的，"
+            "由资深研究员精选最终结果。"
         ),
     ),
     ScreenerStrategy(
         id="small_cap",
-        name="小市值",
+        name="小盘精选",
         description=(
-            "总市值 ≤ 50 亿 + 营收同比 ≥ 10% + 净利同比 ≥ 100%，"
-            "剔除 ST / 创业板 / 科创板，按总市值升序。"
+            "AI 三位分析师（资金与流动性 / 行业板块 / 成长与估值）分析小市值、高增长标的，"
+            "由资深研究员精选最终结果。"
         ),
     ),
     ScreenerStrategy(
         id="profit_growth",
-        name="净利增长",
-        description="净利润同比增长筛选（对齐参考项目，待开发）。",
-        status="planned",
+        name="业绩高增",
+        description=(
+            "AI 三位分析师（资金与流动性 / 行业板块 / 成长质量）分析高净利增长标的，"
+            "由资深研究员精选最终结果。"
+        ),
     ),
     ScreenerStrategy(
         id="value_stock",
-        name="低估值",
-        description="低 PE/PB + 高股息 + 低负债（对齐参考项目，待开发）。",
-        status="planned",
+        name="价值洼地",
+        description=(
+            "AI 三位分析师（资金与流动性 / 行业板块 / 估值质量）分析低 PE/PB、"
+            "近 12 个月高股息、最新报告期低负债标的，由资深研究员精选最终结果。"
+        ),
     ),
 ]
 
@@ -219,12 +229,54 @@ async def screen_low_price_bull(
     provider: EastmoneyPerformanceProvider | None = None,
 ) -> LowPriceBullResponse:
     """低价擒牛：股价上限 + 净利同比下限，剔除板块/ST，按成交额升序。"""
+    candidates = await collect_low_price_candidates(
+        request,
+        provider=provider,
+        limit=request.top_n,
+    )
+    return LowPriceBullResponse(
+        items=candidates.items,
+        scanned_count=candidates.scanned_count,
+        candidate_count=candidates.candidate_count,
+        fetched_at=datetime.now(TZ_SHANGHAI),
+        source="eastmoney_performance+tencent",
+        filters={
+            "top_n": request.top_n,
+            "max_price": request.max_price,
+            "min_profit_growth": request.min_profit_growth,
+            "max_change_pct": request.max_change_pct,
+            "exclude_st": request.exclude_st,
+            "exclude_gem": request.exclude_gem,
+            "exclude_star": request.exclude_star,
+            "exclude_bj": request.exclude_bj,
+            "report_date": candidates.report_date,
+        },
+    )
+
+
+@dataclass
+class LowPriceCandidateSet:
+    items: list[LowPriceBullItem]
+    quotes: dict[str, Quote]
+    performance: dict[str, PerformanceRow]
+    report_date: str
+    scanned_count: int
+    candidate_count: int
+
+
+async def collect_low_price_candidates(
+    request: LowPriceBullRequest,
+    *,
+    provider: EastmoneyPerformanceProvider | None = None,
+    limit: int = 40,
+) -> LowPriceCandidateSet:
     provider = provider or EastmoneyPerformanceProvider()
     report_date, rows = await provider.fetch(request.min_profit_growth)
     selected = _eligible_performance_symbols(rows, request)
     quotes = await fetch_quotes([symbol for _, symbol in selected])
 
     items: list[LowPriceBullItem] = []
+    performance: dict[str, PerformanceRow] = {}
     for row, symbol in selected:
         if row.profit_growth is None or row.profit_growth < request.min_profit_growth:
             continue
@@ -239,6 +291,7 @@ async def screen_low_price_bull(
             and quote.change_pct > request.max_change_pct
         ):
             continue
+        performance[symbol.code] = row
         items.append(
             LowPriceBullItem(
                 symbol=symbol.code,
@@ -254,23 +307,13 @@ async def screen_low_price_bull(
 
     # 参考项目按成交额由小到大排名
     items.sort(key=lambda item: item.amount or 0)
-    return LowPriceBullResponse(
-        items=items[: request.top_n],
+    return LowPriceCandidateSet(
+        items=items[:limit],
+        quotes=quotes,
+        performance=performance,
+        report_date=report_date,
         scanned_count=len(rows),
         candidate_count=len(items),
-        fetched_at=datetime.now(TZ_SHANGHAI),
-        source="eastmoney_performance+tencent",
-        filters={
-            "top_n": request.top_n,
-            "max_price": request.max_price,
-            "min_profit_growth": request.min_profit_growth,
-            "max_change_pct": request.max_change_pct,
-            "exclude_st": request.exclude_st,
-            "exclude_gem": request.exclude_gem,
-            "exclude_star": request.exclude_star,
-            "exclude_bj": request.exclude_bj,
-            "report_date": report_date,
-        },
     )
 
 
@@ -280,6 +323,48 @@ async def screen_small_cap(
     provider: EastmoneyPerformanceProvider | None = None,
 ) -> SmallCapResponse:
     """小市值：总市值上限 + 营收/净利增速下限，按总市值升序。"""
+    candidates = await collect_small_cap_candidates(
+        request,
+        provider=provider,
+        limit=request.top_n,
+    )
+    return SmallCapResponse(
+        items=candidates.items,
+        scanned_count=candidates.scanned_count,
+        candidate_count=candidates.candidate_count,
+        fetched_at=datetime.now(TZ_SHANGHAI),
+        source="eastmoney_performance+tencent",
+        filters={
+            "top_n": request.top_n,
+            "max_market_cap": request.max_market_cap,
+            "min_profit_growth": request.min_profit_growth,
+            "min_revenue_growth": request.min_revenue_growth,
+            "max_change_pct": request.max_change_pct,
+            "exclude_st": request.exclude_st,
+            "exclude_gem": request.exclude_gem,
+            "exclude_star": request.exclude_star,
+            "exclude_bj": request.exclude_bj,
+            "report_date": candidates.report_date,
+        },
+    )
+
+
+@dataclass
+class SmallCapCandidateSet:
+    items: list[SmallCapItem]
+    quotes: dict[str, Quote]
+    performance: dict[str, PerformanceRow]
+    report_date: str
+    scanned_count: int
+    candidate_count: int
+
+
+async def collect_small_cap_candidates(
+    request: SmallCapRequest,
+    *,
+    provider: EastmoneyPerformanceProvider | None = None,
+    limit: int = 40,
+) -> SmallCapCandidateSet:
     provider = provider or EastmoneyPerformanceProvider()
     report_date, rows = await provider.fetch(
         request.min_profit_growth,
@@ -290,6 +375,7 @@ async def screen_small_cap(
     max_cap = request.max_market_cap * 1e8
 
     items: list[SmallCapItem] = []
+    performance: dict[str, PerformanceRow] = {}
     for row, symbol in selected:
         if row.profit_growth is None or row.profit_growth < request.min_profit_growth:
             continue
@@ -306,6 +392,7 @@ async def screen_small_cap(
             and quote.change_pct > request.max_change_pct
         ):
             continue
+        performance[symbol.code] = row
         items.append(
             SmallCapItem(
                 symbol=symbol.code,
@@ -321,22 +408,72 @@ async def screen_small_cap(
 
     # 参考项目按总市值由小到大排名
     items.sort(key=lambda item: item.total_market_cap or 0)
-    return SmallCapResponse(
-        items=items[: request.top_n],
+    return SmallCapCandidateSet(
+        items=items[:limit],
+        quotes=quotes,
+        performance=performance,
+        report_date=report_date,
         scanned_count=len(rows),
         candidate_count=len(items),
-        fetched_at=datetime.now(TZ_SHANGHAI),
-        source="eastmoney_performance+tencent",
-        filters={
-            "top_n": request.top_n,
-            "max_market_cap": request.max_market_cap,
-            "min_profit_growth": request.min_profit_growth,
-            "min_revenue_growth": request.min_revenue_growth,
-            "max_change_pct": request.max_change_pct,
-            "exclude_st": request.exclude_st,
-            "exclude_gem": request.exclude_gem,
-            "exclude_star": request.exclude_star,
-            "exclude_bj": request.exclude_bj,
-            "report_date": report_date,
-        },
+    )
+
+
+@dataclass
+class ProfitGrowthCandidateSet:
+    items: list[ProfitGrowthItem]
+    quotes: dict[str, Quote]
+    performance: dict[str, PerformanceRow]
+    report_date: str
+    scanned_count: int
+    candidate_count: int
+
+
+async def collect_profit_growth_candidates(
+    request: ProfitGrowthAnalysisRequest,
+    *,
+    provider: EastmoneyPerformanceProvider | None = None,
+    limit: int = 40,
+) -> ProfitGrowthCandidateSet:
+    """净利增长：最新报告期净利同比达到阈值，按成交额由小到大排名。"""
+    provider = provider or EastmoneyPerformanceProvider()
+    report_date, rows = await provider.fetch(request.min_profit_growth)
+    selected = _eligible_performance_symbols(rows, request)
+    quotes = await fetch_quotes([symbol for _, symbol in selected])
+
+    items: list[ProfitGrowthItem] = []
+    performance: dict[str, PerformanceRow] = {}
+    for row, symbol in selected:
+        if row.profit_growth is None or row.profit_growth < request.min_profit_growth:
+            continue
+        quote = quotes.get(symbol.code)
+        if quote is None or quote.price is None or quote.amount is None:
+            continue
+        if (
+            request.max_change_pct is not None
+            and quote.change_pct is not None
+            and quote.change_pct > request.max_change_pct
+        ):
+            continue
+        performance[symbol.code] = row
+        items.append(
+            ProfitGrowthItem(
+                symbol=symbol.code,
+                name=row.name,
+                price=quote.price,
+                change_pct=quote.change_pct,
+                amount=quote.amount,
+                profit_growth=row.profit_growth,
+                revenue_growth=row.revenue_growth,
+                report_date=row.report_date or report_date,
+            )
+        )
+
+    items.sort(key=lambda item: item.amount or 0)
+    return ProfitGrowthCandidateSet(
+        items=items[:limit],
+        quotes=quotes,
+        performance=performance,
+        report_date=report_date,
+        scanned_count=len(rows),
+        candidate_count=len(items),
     )

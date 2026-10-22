@@ -55,7 +55,9 @@ async def email():
 
 
 async def _send_code(client: AsyncClient, email: str, purpose: str = "register"):
-    return await client.post("/api/v1/auth/email/send-code", json={"email": email, "purpose": purpose})
+    return await client.post(
+        "/api/v1/auth/email/send-code", json={"email": email, "purpose": purpose}
+    )
 
 
 async def _register(client: AsyncClient, outbox: dict, email: str, nickname: str = "测试用户"):
@@ -225,3 +227,63 @@ async def test_password_policy(client: AsyncClient, outbox: dict, email: str):
     )
     assert resp.status_code == 422
     assert resp.json()["code"] == "VALIDATION_ERROR"
+
+
+async def test_update_profile(client: AsyncClient, outbox: dict, email: str):
+    resp = await _register(client, outbox, email)
+    assert resp.status_code == 200, resp.text
+    token = resp.json()["access_token"]
+    headers = {"Authorization": f"Bearer {token}"}
+
+    resp = await client.patch(
+        "/api/v1/auth/me", json={"nickname": "新的昵称"}, headers=headers
+    )
+    assert resp.status_code == 200, resp.text
+    assert resp.json()["nickname"] == "新的昵称"
+
+    me = await client.get("/api/v1/auth/me", headers=headers)
+    assert me.status_code == 200
+    assert me.json()["nickname"] == "新的昵称"
+
+    resp = await client.patch("/api/v1/auth/me", json={"nickname": "a"}, headers=headers)
+    assert resp.status_code == 422
+
+
+async def test_change_password(client: AsyncClient, outbox: dict, email: str):
+    resp = await _register(client, outbox, email)
+    assert resp.status_code == 200, resp.text
+    headers = {"Authorization": f"Bearer {resp.json()['access_token']}"}
+
+    resp = await client.post(
+        "/api/v1/auth/password/change",
+        json={"current_password": "wrongpass123", "new_password": "newpass2026"},
+        headers=headers,
+    )
+    assert resp.status_code == 400
+    assert resp.json()["code"] == "INVALID_CREDENTIALS"
+
+    resp = await client.post(
+        "/api/v1/auth/password/change",
+        json={"current_password": PASSWORD, "new_password": PASSWORD},
+        headers=headers,
+    )
+    assert resp.status_code == 400
+    assert resp.json()["code"] == "VALIDATION_ERROR"
+
+    resp = await client.post(
+        "/api/v1/auth/password/change",
+        json={"current_password": PASSWORD, "new_password": "newpass2026"},
+        headers=headers,
+    )
+    assert resp.status_code == 200, resp.text
+
+    client.cookies.clear()
+    resp = await client.post(
+        "/api/v1/auth/login", json={"email": email, "password": PASSWORD}
+    )
+    assert resp.status_code == 401
+
+    resp = await client.post(
+        "/api/v1/auth/login", json={"email": email, "password": "newpass2026"}
+    )
+    assert resp.status_code == 200, resp.text

@@ -26,6 +26,10 @@ export const useAuthStore = defineStore('auth', () => {
     user.value = null
   }
 
+  function setUser(next: User): void {
+    user.value = next
+  }
+
   /** 首次进入应用时尝试用 httpOnly Cookie 恢复会话 */
   async function bootstrap(): Promise<void> {
     if (bootstrapped.value) return
@@ -76,5 +80,6 @@ export const useAuthStore = defineStore('auth', () => {
     register,
     logout,
     clearSession,
+    setUser,
   }
 })

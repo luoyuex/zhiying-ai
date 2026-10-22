@@ -68,7 +68,7 @@
 <script setup lang="ts">
 const features = [
   { index: '01', title: '多智能体协作', desc: '六个分析师并行出报告，再开会讨论、下结论' },
-  { index: '02', title: '结论可追溯', desc: '每个数字都带来源与时间戳，AI 结论标注模型版本' },
+  { index: '02', title: '结论可追溯', desc: '每个数字都带来源与时间戳，AI 结论可回溯' },
   { index: '03', title: '价格由代码算', desc: '入场、止盈、止损不交给模型猜，规则统一可复现' },
 ]
 </script>

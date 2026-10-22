@@ -158,6 +158,45 @@ async def reset_password(
     logger.info("password reset id=%s", user.id)
 
 
+async def update_profile(db: AsyncSession, user: User, nickname: str) -> User:
+    user.nickname = nickname.strip()
+    await db.commit()
+    await db.refresh(user)
+    return user
+
+
+async def change_password(
+    db: AsyncSession,
+    user: User,
+    current_password: str,
+    new_password: str,
+) -> None:
+    if not user.password_hash or not security.verify_password(
+        current_password, user.password_hash
+    ):
+        raise errors.AppError(
+            errors.ErrorCode.INVALID_CREDENTIALS,
+            "当前密码不正确",
+            400,
+        )
+    if current_password == new_password:
+        raise errors.AppError(
+            errors.ErrorCode.VALIDATION_ERROR,
+            "新密码不能与当前密码相同",
+            400,
+        )
+    if new_password.lower() == user.email.split("@")[0].lower():
+        raise errors.AppError(
+            errors.ErrorCode.VALIDATION_ERROR,
+            "密码不能与邮箱前缀相同",
+            400,
+        )
+    user.password_hash = security.hash_password(new_password)
+    await revoke_all_sessions(db, user.id)
+    await db.commit()
+    logger.info("password changed id=%s", user.id)
+
+
 async def rotate_session(
     db: AsyncSession,
     raw_refresh: str | None,

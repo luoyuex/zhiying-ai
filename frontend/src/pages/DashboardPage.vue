@@ -37,7 +37,7 @@ function quotaHint(): string {
   if (aiConfigLoading.value) return '加载中'
   if (!aiConfig.value) return 'AI 状态获取失败'
   return aiConfig.value.configured
-    ? `模型 ${aiConfig.value.model}`
+    ? '每日 0 点重置'
     : 'LLM 未配置，AI 分析暂不可用'
 }
 
@@ -107,7 +107,7 @@ onMounted(() => {
     <section class="flex flex-wrap items-end justify-between gap-4">
       <div>
         <p class="text-[13px] text-ink-3">{{ greeting }}，{{ auth.user?.nickname }}</p>
-        <h1 class="mt-1 text-[24px] font-semibold tracking-tight text-ink">工作台</h1>
+        <h1 class="mt-1 text-[24px] font-semibold tracking-tight text-ink">首页</h1>
       </div>
       <div class="flex items-center gap-4">
         <RouterLink

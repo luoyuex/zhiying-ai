@@ -88,7 +88,7 @@ def job_events_channel(job_id: str) -> str:
     return f"ai:job:events:{job_id}"
 
 
-async def _get_arq_pool() -> ArqRedis:
+async def get_arq_pool() -> ArqRedis:
     global _ARQ_POOL
     if _ARQ_POOL is None:
         async with _ARQ_LOCK:
@@ -205,9 +205,17 @@ async def start_ai_job(
     active_job_id = await redis.get(_active_key(user_id, symbol))
     if active_job_id:
         try:
-            return await get_ai_job(redis, user_id, active_job_id)
+            active = await get_ai_job(redis, user_id, active_job_id)
         except (AIJobNotFoundError, AIJobForbiddenError):
-            pass
+            active = None
+        # force 请求不能被普通任务顶替：旧任务可能直接命中 6h 缓存；
+        # 只有本身就是 force 创建、仍在排队的任务才值得复用
+        if (
+            active is not None
+            and active.status in (AIJobStatus.QUEUED, AIJobStatus.RUNNING)
+            and (not force or active.force)
+        ):
+            return active
 
     if settings.ai_job_execution == "arq" and not await worker_alive(redis):
         raise AIWorkerUnavailableError("分析队列未启动，请先运行 npm run worker")
@@ -219,10 +227,12 @@ async def start_ai_job(
         status=AIJobStatus.QUEUED,
         symbol=symbol,
         phase="排队中",
+        force=force,
         created_at=now,
         updated_at=now,
     )
     await _save_state(redis, job_id, user_id, state)
+    logger.info("AI 任务创建 job_id=%s symbol=%s force=%s", job_id, symbol, force)
     await redis.set(
         _active_key(user_id, symbol),
         job_id,
@@ -231,7 +241,7 @@ async def start_ai_job(
 
     if settings.ai_job_execution == "arq":
         try:
-            pool = await _get_arq_pool()
+            pool = await get_arq_pool()
             await pool.enqueue_job(
                 "run_ai_job",
                 job_id,
@@ -262,15 +272,22 @@ async def get_active_job(
     user_id: object,
     raw_symbol: str,
 ) -> AIJobState | None:
-    """返回该股票当前仍在运行的任务；没有活跃任务时返回 None。"""
+    """返回该股票仍在排队/运行的任务；没有活跃任务时返回 None。
+
+    worker 崩溃或收尾竞态可能让 active key 指向已结束的任务，
+    终态任务不作为活跃任务返回，避免详情页接上一个旧结果。
+    """
     symbol = parse_symbol(raw_symbol).code
     job_id = await redis.get(_active_key(user_id, symbol))
     if not job_id:
         return None
     try:
-        return await get_ai_job(redis, user_id, job_id)
+        state = await get_ai_job(redis, user_id, job_id)
     except (AIJobNotFoundError, AIJobForbiddenError):
         return None
+    if state.status in (AIJobStatus.SUCCEEDED, AIJobStatus.FAILED):
+        return None
+    return state
 
 
 async def run_ai_job_task(

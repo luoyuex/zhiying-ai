@@ -63,7 +63,7 @@ async def test_start_enqueues_arq_job(monkeypatch):
         return pool
 
     monkeypatch.setattr(ai_job_service, "worker_alive", alive)
-    monkeypatch.setattr(ai_job_service, "_get_arq_pool", fake_pool)
+    monkeypatch.setattr(ai_job_service, "get_arq_pool", fake_pool)
 
     try:
         state = await start_ai_job(redis, user_id, 5, "600519")
@@ -93,7 +93,7 @@ async def test_active_job_lookup(monkeypatch):
         return FakePool()
 
     monkeypatch.setattr(ai_job_service, "worker_alive", alive)
-    monkeypatch.setattr(ai_job_service, "_get_arq_pool", fake_pool)
+    monkeypatch.setattr(ai_job_service, "get_arq_pool", fake_pool)
 
     state = None
     try:
@@ -104,6 +104,98 @@ async def test_active_job_lookup(monkeypatch):
         assert await get_active_job(redis, user_id, "000001") is None
 
         await redis.delete(f"ai:active:{user_id}:600519")
+        assert await get_active_job(redis, user_id, "600519") is None
+    finally:
+        if state is not None:
+            await redis.delete(f"ai:job:{state.job_id}")
+        await redis.delete(f"ai:active:{user_id}:600519")
+
+
+async def test_force_request_creates_new_job_over_plain_job(monkeypatch):
+    redis = get_redis()
+    user_id = uuid.uuid4()
+    monkeypatch.setattr(settings, "ai_job_execution", "arq")
+    monkeypatch.setattr(ai_job_service, "is_llm_configured", lambda: True)
+
+    async def alive(_: object) -> bool:
+        return True
+
+    pool = FakePool()
+
+    async def fake_pool() -> FakePool:
+        return pool
+
+    monkeypatch.setattr(ai_job_service, "worker_alive", alive)
+    monkeypatch.setattr(ai_job_service, "get_arq_pool", fake_pool)
+
+    state = None
+    forced = None
+    try:
+        state = await start_ai_job(redis, user_id, 5, "600519")
+        forced = await start_ai_job(redis, user_id, 5, "600519", force=True)
+
+        assert forced.job_id != state.job_id
+        assert forced.force is True
+        assert len(pool.calls) == 2
+        assert pool.calls[1][0][-1] is True
+    finally:
+        for job_id in (state.job_id if state else None, forced.job_id if forced else None):
+            if job_id:
+                await redis.delete(f"ai:job:{job_id}")
+        await redis.delete(f"ai:active:{user_id}:600519")
+
+
+async def test_force_request_reuses_running_force_job(monkeypatch):
+    redis = get_redis()
+    user_id = uuid.uuid4()
+    monkeypatch.setattr(settings, "ai_job_execution", "arq")
+    monkeypatch.setattr(ai_job_service, "is_llm_configured", lambda: True)
+
+    async def alive(_: object) -> bool:
+        return True
+
+    pool = FakePool()
+
+    async def fake_pool() -> FakePool:
+        return pool
+
+    monkeypatch.setattr(ai_job_service, "worker_alive", alive)
+    monkeypatch.setattr(ai_job_service, "get_arq_pool", fake_pool)
+
+    state = None
+    try:
+        state = await start_ai_job(redis, user_id, 5, "600519", force=True)
+        again = await start_ai_job(redis, user_id, 5, "600519", force=True)
+
+        assert again.job_id == state.job_id
+        assert len(pool.calls) == 1
+    finally:
+        if state is not None:
+            await redis.delete(f"ai:job:{state.job_id}")
+        await redis.delete(f"ai:active:{user_id}:600519")
+
+
+async def test_active_job_ignores_finished_job(monkeypatch):
+    redis = get_redis()
+    user_id = uuid.uuid4()
+    monkeypatch.setattr(settings, "ai_job_execution", "arq")
+    monkeypatch.setattr(ai_job_service, "is_llm_configured", lambda: True)
+
+    async def alive(_: object) -> bool:
+        return True
+
+    async def fake_pool() -> FakePool:
+        return FakePool()
+
+    monkeypatch.setattr(ai_job_service, "worker_alive", alive)
+    monkeypatch.setattr(ai_job_service, "get_arq_pool", fake_pool)
+
+    state = None
+    try:
+        state = await start_ai_job(redis, user_id, 5, "600519")
+        await ai_job_service._update_state(
+            redis, state.job_id, user_id, status=ai_job_service.AIJobStatus.FAILED
+        )
         assert await get_active_job(redis, user_id, "600519") is None
     finally:
         if state is not None:

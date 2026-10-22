@@ -626,7 +626,7 @@ onBeforeUnmount(() => {
           class="inline-flex items-center gap-1 text-xs text-ink-3 transition-colors hover:text-ink"
         >
           <span aria-hidden="true">←</span>
-          返回工作台
+          返回首页
         </RouterLink>
         <h1 class="mt-2 text-[24px] font-semibold tracking-tight text-ink">
           {{ quote?.name ?? '个股行情' }}
@@ -675,7 +675,7 @@ onBeforeUnmount(() => {
     >
       股票代码必须是 6 位数字。
       <RouterLink to="/" class="ml-1 font-medium text-primary hover:text-primary-hover">
-        返回工作台
+        返回首页
       </RouterLink>
     </div>
 
@@ -776,7 +776,7 @@ onBeforeUnmount(() => {
             v-if="aiConfig"
             class="flex shrink-0 flex-col items-end gap-1.5 text-right text-[11px] leading-relaxed text-ink-3"
           >
-            <div>{{ aiConfig.model }} · 今日额度 {{ aiConfig.quota_used }} / {{ aiConfig.daily_quota }}</div>
+            <div>今日额度 {{ aiConfig.quota_used }} / {{ aiConfig.daily_quota }}</div>
             <div class="flex flex-wrap items-center justify-end gap-2">
               <RouterLink
                 v-if="aiReport?.report_id"
@@ -870,7 +870,6 @@ onBeforeUnmount(() => {
             </div>
             <p class="mt-2 text-[11px] leading-relaxed text-ink-3">
               任务在后台执行，通常需要 1–3 分钟，页面会自动更新进度；每次消耗 1 次额度。
-              同股同交易日 + 同模型 6 小时内复用，不重复消耗。
             </p>
             <div
               v-if="aiError"
@@ -1109,9 +1108,8 @@ onBeforeUnmount(() => {
             />
 
             <div
-              class="mt-4 flex flex-wrap items-center justify-between gap-2 border-t border-line pt-3 text-[11px] text-ink-3"
+              class="mt-4 flex flex-wrap items-center justify-end gap-2 border-t border-line pt-3 text-[11px] text-ink-3"
             >
-              <span>{{ aiReport.model }} · {{ aiReport.prompt_version }}</span>
               <span class="tabular-nums">
                 {{ aiGeneratedTime }} · 额度 {{ aiReport.quota_used }} / {{ aiReport.quota_limit }}
               </span>
