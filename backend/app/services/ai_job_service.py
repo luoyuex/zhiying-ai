@@ -357,7 +357,7 @@ async def _run_job(
         )
         tasks = [
             get_financial_data(redis, quote),
-            get_fund_flow(redis, quote),
+            get_fund_flow(redis, quote.symbol),
             build_sentiment_data(redis, quote, kline.bars, technical),
         ]
         if settings.wsa_search_configured:

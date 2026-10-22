@@ -11,15 +11,21 @@ from app.db.models.user import User
 from app.db.redis import get_redis
 from app.llm.client import LLMNotConfiguredError, is_llm_configured
 from app.providers.base import DataNotFound, MarketUnavailable
+from app.providers.fundflow import get_fund_flow
 from app.providers.models import Adjust, KlinePeriod, KlineSeries, Quote
-from app.providers.symbols import InvalidSymbolError
+from app.providers.symbols import InvalidSymbolError, parse_symbol
 from app.schemas.ai import AIJobState
 from app.schemas.analysis import TechnicalAnalysis
+from app.schemas.company import FundFlowData
+from app.schemas.news import CompanyNewsData
+from app.schemas.search import WebSearchResult
 from app.schemas.stock import StockSearchItem
 from app.services.ai_job_service import AIWorkerUnavailableError, start_ai_job
+from app.services.company_news_service import get_company_news
 from app.services.market_service import MarketDataService
 from app.services.stock_directory_service import search_stocks as search_stock_directory
 from app.services.technical_analysis import InsufficientDataError, analyze_technicals
+from app.services.web_search_service import search_symbol_web
 
 logger = get_logger(__name__)
 
@@ -108,6 +114,91 @@ async def get_analysis(
         raise errors.market_unavailable() from exc
     except InsufficientDataError as exc:
         raise errors.analysis_unavailable(str(exc)) from exc
+
+
+@router.get("/{symbol}/fund-flow", response_model=FundFlowData, summary="个股资金流")
+async def get_stock_fund_flow(
+    symbol: str,
+    _: User = Depends(get_current_user),
+    redis: Redis = Depends(get_redis),
+) -> FundFlowData:
+    try:
+        parsed = parse_symbol(symbol)
+    except InvalidSymbolError as exc:
+        raise errors.invalid_symbol(str(exc)) from exc
+
+    data = await get_fund_flow(redis, parsed.code)
+    if data is None or not data.days:
+        raise errors.market_unavailable()
+    return data
+
+
+@router.get("/{symbol}/news", response_model=CompanyNewsData, summary="个股公告与新闻")
+async def get_stock_news(
+    symbol: str,
+    limit: int = Query(20, ge=1, le=50, description="每类返回条数"),
+    _: User = Depends(get_current_user),
+    redis: Redis = Depends(get_redis),
+    service: MarketDataService = Depends(get_market_service),
+) -> CompanyNewsData:
+    try:
+        parsed = parse_symbol(symbol)
+    except InvalidSymbolError as exc:
+        raise errors.invalid_symbol(str(exc)) from exc
+
+    name = ""
+    try:
+        name = (await service.get_quote(parsed.code)).name
+    except Exception:  # noqa: BLE001
+        # 名称只用于新闻检索关键词，取不到时退回代码，不阻塞资讯
+        pass
+
+    try:
+        return await get_company_news(redis, parsed.code, name=name, limit=limit)
+    except MarketUnavailable as exc:
+        logger.warning("资讯全源失败 %s: %s", parsed.code, exc)
+        raise errors.market_unavailable() from exc
+
+
+@router.post(
+    "/{symbol}/news/ai-search",
+    response_model=WebSearchResult,
+    summary="按需检索公开资讯（元宝）",
+)
+async def ai_search_stock_news(
+    symbol: str,
+    user: User = Depends(get_current_user),
+    redis: Redis = Depends(get_redis),
+    service: MarketDataService = Depends(get_market_service),
+) -> WebSearchResult:
+    try:
+        parsed = parse_symbol(symbol)
+    except InvalidSymbolError as exc:
+        raise errors.invalid_symbol(str(exc)) from exc
+
+    cooldown_key = f"web:search:cooldown:{user.id}:{parsed.code}"
+    acquired = True
+    try:
+        acquired = bool(await redis.set(cooldown_key, "1", ex=30, nx=True))
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("元宝检索冷却检查失败: %s", exc)
+    if not acquired:
+        raise errors.rate_limited("检索过于频繁，请 30 秒后再试", 30)
+
+    try:
+        quote = await service.get_quote(parsed.code)
+    except InvalidSymbolError as exc:
+        raise errors.invalid_symbol(str(exc)) from exc
+    except DataNotFound as exc:
+        raise errors.stock_not_found(parsed.code) from exc
+    except MarketUnavailable as exc:
+        raise errors.market_unavailable() from exc
+
+    return await search_symbol_web(
+        redis,
+        quote,
+        cache_seconds=settings.market_news_ai_cache_seconds,
+    )
 
 
 @router.post(

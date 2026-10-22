@@ -306,6 +306,7 @@ async def search_symbol_web(
     quote: Quote,
     *,
     client: YuanbaoSearchClient | None = None,
+    cache_seconds: int | None = None,
 ) -> WebSearchResult:
     query = build_query(quote)
     if not settings.wsa_search_configured:
@@ -336,7 +337,11 @@ async def search_symbol_web(
             await redis.set(
                 cache_key,
                 result.model_dump_json(),
-                ex=settings.wsa_search_cache_seconds,
+                ex=(
+                    cache_seconds
+                    if cache_seconds is not None
+                    else settings.wsa_search_cache_seconds
+                ),
             )
         except Exception as exc:  # noqa: BLE001
             logger.warning("写入元宝搜索缓存失败: %s", exc)

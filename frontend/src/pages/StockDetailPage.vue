@@ -13,7 +13,10 @@ import { marketApi, type KlineSeries, type Quote, type TechnicalAnalysis } from 
 import { reportsApi, type ReportSummary } from '@/api/reports'
 import { watchlistApi } from '@/api/watchlist'
 import AppShell from '@/components/layout/AppShell.vue'
-import MiniKline from '@/components/market/MiniKline.vue'
+import FundFlowSection from '@/components/market/FundFlowSection.vue'
+import KlineChart from '@/components/market/KlineChart.vue'
+import CompanyNewsPanel from '@/components/news/CompanyNewsPanel.vue'
+import AIJobProgress from '@/components/report/AIJobProgress.vue'
 import DiscussionTimeline from '@/components/report/DiscussionTimeline.vue'
 import PublicInfoPanel from '@/components/report/PublicInfoPanel.vue'
 import Button from '@/components/ui/Button.vue'
@@ -26,6 +29,7 @@ import {
   quoteToneClass,
   sourceLabel,
 } from '@/utils/market'
+import { analystScoreTone, decisionLevels } from '@/utils/report'
 
 const PERIODS = [
   { value: 'day', label: '日 K' },
@@ -226,22 +230,9 @@ const webUsedBy = computed(() =>
     .map((analyst) => `${analyst.name}分析师`),
 )
 
-const decisionLevels = computed(() => {
-  const levels = aiReport.value?.decision?.levels
-  if (!levels) return []
-  return [
-    { label: '建议入场', value: levels.entry.toFixed(2), tone: 'text-primary' },
-    { label: '止盈', value: levels.take_profit.toFixed(2), tone: 'text-up' },
-    { label: '止损', value: levels.stop_loss.toFixed(2), tone: 'text-down' },
-    { label: '盈亏比', value: `${levels.risk_reward.toFixed(2)} : 1`, tone: 'text-ink' },
-  ]
-})
-
-function analystTone(score: number): string {
-  if (score >= 65) return 'text-up'
-  if (score < 45) return 'text-down'
-  return 'text-ink-2'
-}
+const decisionLevelItems = computed(() =>
+  decisionLevels(aiReport.value?.decision?.levels, false),
+)
 
 function formatReportTime(iso: string): string {
   return new Date(iso).toLocaleString('zh-CN', {
@@ -368,7 +359,7 @@ async function resumeActiveAIJob(value: string): Promise<void> {
     aiError.value = ''
     aiJobId.value = data.job_id
     aiPhase.value = data.phase || '排队中'
-    aiElapsed.value = data.elapsed_seconds
+    aiElapsed.value = Math.max(aiElapsed.value, data.elapsed_seconds)
     startAIElapsedTimer()
     if (!applyAIJob(data)) void openAIStream(data.job_id, seq)
   } catch {
@@ -432,7 +423,8 @@ async function openAIStream(jobId: string, seq: number): Promise<void> {
 
 function applyAIJob(job: AIJobState): boolean {
   aiPhase.value = job.phase
-  aiElapsed.value = job.elapsed_seconds
+  // 单调校准：服务端 created_at 晚于本地提交时刻，直接覆盖会轻微回跳
+  aiElapsed.value = Math.max(aiElapsed.value, job.elapsed_seconds)
 
   if (job.status === 'succeeded') {
     if (job.result) {
@@ -507,7 +499,7 @@ async function loadKline(value: string): Promise<void> {
     const { data } = await marketApi.kline(value, {
       period: period.value,
       adjust: adjust.value,
-      limit: 90,
+      limit: 120,
     })
     if (seq === klineSeq) kline.value = data
   } catch (err) {
@@ -861,13 +853,7 @@ onBeforeUnmount(() => {
                 今日剩余 {{ aiQuotaLeft }} 次
               </span>
             </div>
-            <div
-              v-if="aiLoading"
-              class="mt-3 flex items-center gap-2 rounded-md bg-primary-soft px-3 py-2 text-xs text-primary-hover"
-            >
-              <span class="size-3.5 animate-spin rounded-full border-2 border-primary/30 border-t-primary" />
-              <span>{{ aiPhase || '排队中' }} · 已等待 {{ aiElapsed }} 秒</span>
-            </div>
+            <AIJobProgress v-if="aiLoading" class="mt-3" :phase="aiPhase" :elapsed="aiElapsed" />
             <p class="mt-2 text-[11px] leading-relaxed text-ink-3">
               任务在后台执行，通常需要 1–3 分钟，页面会自动更新进度；每次消耗 1 次额度。
             </p>
@@ -880,6 +866,18 @@ onBeforeUnmount(() => {
           </div>
 
           <div v-else class="mt-4">
+            <AIJobProgress
+              v-if="aiLoading"
+              class="mb-4"
+              :phase="aiPhase"
+              :elapsed="aiElapsed"
+            />
+            <div
+              v-if="aiError"
+              class="mb-4 rounded-md bg-danger-soft px-3 py-2 text-[13px] text-danger"
+            >
+              {{ aiError }}
+            </div>
             <div class="flex flex-wrap items-start justify-between gap-4">
               <div class="flex flex-wrap items-center gap-2">
                 <span
@@ -969,7 +967,7 @@ onBeforeUnmount(() => {
 
               <div class="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-4">
                 <div
-                  v-for="item in decisionLevels"
+                  v-for="item in decisionLevelItems"
                   :key="item.label"
                   class="rounded-md bg-canvas px-2.5 py-2"
                 >
@@ -1028,7 +1026,7 @@ onBeforeUnmount(() => {
                       <span class="text-[11px] text-ink-3">{{ analyst.rating }}</span>
                       <span
                         class="text-sm font-semibold tabular-nums"
-                        :class="analystTone(analyst.score)"
+                        :class="analystScoreTone(analyst.score)"
                       >
                         {{ analyst.score }}
                       </span>
@@ -1322,11 +1320,10 @@ onBeforeUnmount(() => {
         </div>
 
         <div class="relative mt-4">
-          <MiniKline
+          <KlineChart
             v-if="kline && kline.bars.length"
             :bars="kline.bars"
-            :title="chartTitle"
-            large
+            class="h-[320px] sm:h-[460px]"
             :class="loadingKline ? 'opacity-60' : ''"
           />
           <div
@@ -1357,12 +1354,16 @@ onBeforeUnmount(() => {
         </div>
 
         <div class="mt-2 flex flex-wrap items-center justify-between gap-2 text-[11px] text-ink-3">
-          <span>{{ periodLabel }} · {{ adjustLabel }}</span>
+          <span>{{ chartTitle }} · {{ periodLabel }} · {{ adjustLabel }}</span>
           <span v-if="kline" class="tabular-nums">
             K 线来源 {{ sourceLabel(kline.source) }} · {{ formatQuoteTime(kline.fetched_at) }}
           </span>
         </div>
       </section>
+
+      <FundFlowSection :symbol="code" />
+
+      <CompanyNewsPanel :symbol="code" />
     </template>
   </AppShell>
 </template>

@@ -6,7 +6,10 @@ export const SOURCE_LABELS: Record<string, string> = {
   eastmoney: '东方财富',
   eastmoney_finance: '东财财务',
   eastmoney_fundflow: '东财资金流',
+  sina_fundflow: '新浪资金流',
   eastmoney_index: '东财指数',
+  eastmoney_announcement: '东财公告',
+  eastmoney_news: '东财资讯',
   computed: '本地计算',
   computed_technical: '本地计算',
 }
@@ -17,11 +20,12 @@ export function sourceLabel(source?: string): string {
 }
 
 export function formatSourceList(sources: string[]): string {
-  return sources
+  const labels = sources
     .flatMap((source) => source.split('/'))
     .map((part) => sourceLabel(part.trim()))
     .filter((part) => part && part !== '—')
-    .join(' / ')
+  // 不同原始 source 可能映射到同一中文名（如 tencent / tencent_kline），展示前去重
+  return Array.from(new Set(labels)).join(' / ')
 }
 
 export function formatPrice(value: number | null): string {

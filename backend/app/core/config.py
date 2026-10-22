@@ -16,7 +16,7 @@ class Settings(BaseSettings):
     )
 
     # 应用
-    app_name: str = "智赢 AI"
+    app_name: str = "智盈 AI"
     debug: bool = False
     cors_origins: str = "http://localhost:5173"
     cookie_secure: bool = False
@@ -44,7 +44,7 @@ class Settings(BaseSettings):
     smtp_port: int = 465
     smtp_user: str = ""
     smtp_password: str = ""
-    smtp_from_name: str = "智赢 AI"
+    smtp_from_name: str = "智盈 AI"
 
     # 行情数据源
     egress_proxy_url: str = ""
@@ -58,6 +58,9 @@ class Settings(BaseSettings):
     market_circuit_failures: int = 5
     market_circuit_window_seconds: int = 60
     market_circuit_open_seconds: int = 60
+    # 个股公告/新闻缓存；元宝按需检索结果单独缓存 6 小时
+    market_news_cache_seconds: int = 600
+    market_news_ai_cache_seconds: int = 21600
 
     # LLM（OpenAI 兼容协议）
     llm_base_url: str = ""

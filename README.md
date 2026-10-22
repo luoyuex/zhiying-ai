@@ -1,4 +1,4 @@
-# 智赢 AI（zhiying-ai）
+# 智盈 AI（zhiying-ai）
 
 A 股 AI 分析工作台。前端 Vue 3 + TypeScript，后端 FastAPI + PostgreSQL + Redis。
 
@@ -110,7 +110,7 @@ SMTP_HOST=smtp.qq.com      # QQ 邮箱；163 用 smtp.163.com；Gmail 用 smtp.g
 SMTP_PORT=465              # 465 走 SSL，587 走 STARTTLS
 SMTP_USER=你的邮箱@qq.com
 SMTP_PASSWORD=授权码        # 注意：邮箱设置里生成的授权码，不是登录密码
-SMTP_FROM_NAME=智赢 AI
+SMTP_FROM_NAME=智盈 AI
 ```
 
 QQ 邮箱授权码获取：设置 → 账户 → 开启 SMTP 服务 → 生成授权码。

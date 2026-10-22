@@ -54,7 +54,7 @@ ANALYST_SPECS: dict[str, tuple[str, str, str]] = {
     ),
 }
 
-SYSTEM_TEMPLATE = """你是智赢 AI 的{role}。
+SYSTEM_TEMPLATE = """你是智盈 AI 的{role}。
 职责：{duty}
 
 规则：

@@ -14,7 +14,7 @@
             智
           </div>
           <div class="leading-tight">
-            <div class="text-[15px] font-semibold text-ink">智赢 AI</div>
+            <div class="text-[15px] font-semibold text-ink">智盈 AI</div>
             <div class="text-xs text-ink-3">A 股 AI 分析工作台</div>
           </div>
         </div>
@@ -57,7 +57,7 @@
           >
             智
           </div>
-          <span class="text-sm font-semibold text-ink">智赢 AI</span>
+          <span class="text-sm font-semibold text-ink">智盈 AI</span>
         </div>
         <slot />
       </div>

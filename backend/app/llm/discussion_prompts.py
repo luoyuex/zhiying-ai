@@ -11,7 +11,7 @@ from app.providers.models import Quote
 from app.schemas.analysis import TechnicalAnalysis
 from app.schemas.analyst import AnalystReport
 
-SYSTEM_PROMPT = """你是智赢 AI 投资圆桌的主持人。
+SYSTEM_PROMPT = """你是智盈 AI 投资圆桌的主持人。
 你会收到六位分析师的结构化报告、当前行情与代码计算的关键价位。
 你的任务是把他们的分歧整理成一段讨论纪要，而不是重新分析或编造新数据。
 

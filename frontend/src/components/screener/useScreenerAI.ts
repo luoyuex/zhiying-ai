@@ -23,6 +23,30 @@ export function useScreenerAI(options: Options) {
   const analysis = ref<ScreenerAnalysisResponse | null>(null)
   const job = ref<ScreenerJobState | null>(null)
 
+  // 本地平滑计时：轮询间隔 2s，直接绑定 job.elapsed_seconds 会出现跳秒，
+  // 这里每秒 +1，轮询返回时用服务端值做单调校准（只增不减）。
+  const displayElapsed = ref(0)
+  let elapsedTimer: ReturnType<typeof setInterval> | null = null
+
+  function syncElapsed(value: number): void {
+    displayElapsed.value = Math.max(displayElapsed.value, value)
+  }
+
+  function startElapsedTimer(): void {
+    if (elapsedTimer === null) {
+      elapsedTimer = setInterval(() => {
+        if (loading.value) displayElapsed.value += 1
+      }, 1000)
+    }
+  }
+
+  function stopElapsedTimer(): void {
+    if (elapsedTimer !== null) {
+      clearInterval(elapsedTimer)
+      elapsedTimer = null
+    }
+  }
+
   const records = ref<ScreenerRecordSummary[]>([])
   const recordsLoading = ref(false)
   const recordsError = ref('')
@@ -126,6 +150,7 @@ export function useScreenerAI(options: Options) {
       const { data } = await screenerApi.jobState(current.job_id)
       pollFailures = 0
       job.value = data
+      syncElapsed(data.elapsed_seconds)
       if (data.status === 'succeeded') {
         stopPolling()
         loading.value = false
@@ -157,6 +182,7 @@ export function useScreenerAI(options: Options) {
       const { data } = await screenerApi.activeJob(options.strategy)
       if (data) {
         job.value = data
+        syncElapsed(data.elapsed_seconds)
         if (data.status === 'queued' || data.status === 'running') {
           loading.value = true
           schedulePoll(0)
@@ -184,9 +210,11 @@ export function useScreenerAI(options: Options) {
     analysis.value = null
     activeRecordId.value = null
     job.value = null
+    displayElapsed.value = 0
     try {
       const { data } = await screenerApi.startJob(options.strategy, payload)
       job.value = data
+      syncElapsed(data.elapsed_seconds)
       if (data.status === 'succeeded') {
         loading.value = false
         await onJobSucceeded(data)
@@ -205,12 +233,14 @@ export function useScreenerAI(options: Options) {
   }
 
   onMounted(() => {
+    startElapsedTimer()
     void init()
   })
 
   onBeforeUnmount(() => {
     disposed = true
     stopPolling()
+    stopElapsedTimer()
   })
 
   return {
@@ -219,6 +249,7 @@ export function useScreenerAI(options: Options) {
     error,
     analysis,
     job,
+    displayElapsed,
     records,
     recordsLoading,
     recordsError,

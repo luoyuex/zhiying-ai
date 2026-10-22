@@ -11,21 +11,44 @@ const props = withDefaults(
     timeStyle?: 'time' | 'datetime'
     /** 来源页，用于报告详情的「返回」目标 */
     from?: 'dashboard' | 'reports' | 'stock'
+    /** 对比选择模式：点击整行切换选中，不跳转 */
+    selectable?: boolean
+    selected?: boolean
   }>(),
   { timeStyle: 'time', from: 'reports' },
 )
+
+const emit = defineEmits<{ toggle: [] }>()
 
 const to = computed(() => ({
   path: `/reports/${props.item.id}`,
   query: { from: props.from },
 }))
+
+function handleClick(event: MouseEvent): void {
+  if (!props.selectable) return
+  event.preventDefault()
+  emit('toggle')
+}
 </script>
 
 <template>
   <RouterLink
     :to="to"
     class="flex items-center gap-3 border-b border-line px-4 py-3.5 transition-colors last:border-b-0 hover:bg-surface"
+    :class="selected ? 'bg-primary-soft/40' : ''"
+    @click="handleClick"
   >
+    <span
+      v-if="selectable"
+      class="inline-flex size-4 shrink-0 items-center justify-center rounded border transition-colors"
+      :class="selected ? 'border-primary bg-primary text-white' : 'border-line-strong'"
+      aria-hidden="true"
+    >
+      <svg v-if="selected" class="size-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3">
+        <path d="m5 12 5 5 9-10" stroke-linecap="round" stroke-linejoin="round" />
+      </svg>
+    </span>
     <span
       class="inline-flex h-7 w-12 shrink-0 items-center justify-center rounded-md text-xs font-semibold"
       :class="ratingTone(item.rating)"
@@ -50,6 +73,6 @@ const to = computed(() => ({
       <div class="text-[11px] text-ink-3">置信度</div>
       <div class="text-sm font-semibold tabular-nums text-ink">{{ item.confidence }}</div>
     </div>
-    <span class="shrink-0 text-sm text-ink-3" aria-hidden="true">→</span>
+    <span v-if="!selectable" class="shrink-0 text-sm text-ink-3" aria-hidden="true">→</span>
   </RouterLink>
 </template>

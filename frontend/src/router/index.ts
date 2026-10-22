@@ -55,6 +55,12 @@ const router = createRouter({
       meta: { requiresAuth: true, title: '历史报告' },
     },
     {
+      path: '/reports/compare',
+      name: 'report-compare',
+      component: () => import('@/pages/ReportComparePage.vue'),
+      meta: { requiresAuth: true, title: '报告对比' },
+    },
+    {
       path: '/reports/:id',
       name: 'report',
       component: () => import('@/pages/ReportDetailPage.vue'),
@@ -84,7 +90,7 @@ router.beforeEach(async (to) => {
 
 router.afterEach((to) => {
   const title = typeof to.meta.title === 'string' ? to.meta.title : ''
-  document.title = title ? `${title} · 智赢 AI` : '智赢 AI · A 股 AI 分析工作台'
+  document.title = title ? `${title} · 智盈 AI` : '智盈 AI · A 股 AI 分析工作台'
 })
 
 export default router

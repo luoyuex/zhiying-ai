@@ -1,16 +1,20 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
-import { useRoute } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 
 import type { AIAnalysisResponse } from '@/api/ai'
 import { reportsApi } from '@/api/reports'
 import AppShell from '@/components/layout/AppShell.vue'
+import AnalystRadar from '@/components/report/AnalystRadar.vue'
 import DiscussionTimeline from '@/components/report/DiscussionTimeline.vue'
 import PublicInfoPanel from '@/components/report/PublicInfoPanel.vue'
 import { getErrorMessage } from '@/utils/errors'
 import { formatQuoteTime, formatSourceList } from '@/utils/market'
+import { exportElementToPdf, pdfFilename } from '@/utils/pdf'
+import { analystScoreTone, decisionLevels } from '@/utils/report'
 
 const route = useRoute()
+const router = useRouter()
 const report = ref<AIAnalysisResponse | null>(null)
 const createdAt = ref('')
 const loading = ref(false)
@@ -66,18 +70,7 @@ const positionActionTone = computed(() => {
   if (action === '减仓' || action === '清仓') return 'bg-down-soft text-down'
   return 'bg-surface-2 text-ink-2'
 })
-const levels = computed(() => {
-  const data = decision.value?.levels
-  if (!data) return []
-  return [
-    { label: '支撑位', value: data.support.toFixed(2), tone: 'text-ink' },
-    { label: '压力位', value: data.resistance.toFixed(2), tone: 'text-ink' },
-    { label: '建议入场', value: data.entry.toFixed(2), tone: 'text-primary' },
-    { label: '止盈', value: data.take_profit.toFixed(2), tone: 'text-up' },
-    { label: '止损', value: data.stop_loss.toFixed(2), tone: 'text-down' },
-    { label: '盈亏比', value: `${data.risk_reward.toFixed(2)} : 1`, tone: 'text-ink' },
-  ]
-})
+const decisionLevelItems = computed(() => decisionLevels(decision.value?.levels))
 const coverageLabels = computed(() => {
   const analysts = report.value?.analysts ?? []
   const labels = ['行情', '技术指标']
@@ -114,12 +107,6 @@ const webUsedBy = computed(() =>
     .map((analyst) => `${analyst.name}分析师`),
 )
 
-function analystTone(score: number): string {
-  if (score >= 65) return 'text-up'
-  if (score < 45) return 'text-down'
-  return 'text-ink-2'
-}
-
 function formatTime(iso: string): string {
   return new Date(iso).toLocaleString('zh-CN', {
     year: 'numeric',
@@ -128,6 +115,53 @@ function formatTime(iso: string): string {
     hour: '2-digit',
     minute: '2-digit',
   })
+}
+
+const compareBusy = ref(false)
+const compareError = ref('')
+const reportRoot = ref<HTMLElement | null>(null)
+const pdfBusy = ref(false)
+const pdfError = ref('')
+
+async function exportPdf(): Promise<void> {
+  if (!reportRoot.value || !report.value || pdfBusy.value) return
+  pdfBusy.value = true
+  pdfError.value = ''
+  try {
+    await exportElementToPdf(
+      reportRoot.value,
+      pdfFilename(report.value.name, report.value.symbol, createdAt.value),
+    )
+  } catch (err) {
+    pdfError.value = getErrorMessage(err, 'PDF 导出失败，请稍后重试')
+  } finally {
+    pdfBusy.value = false
+  }
+}
+
+async function comparePrevious(): Promise<void> {
+  const currentId = String(route.params.id ?? '')
+  if (!report.value || !currentId || compareBusy.value) return
+
+  compareBusy.value = true
+  compareError.value = ''
+  try {
+    const { data } = await reportsApi.list(report.value.symbol, 50)
+    const index = data.findIndex((item) => item.id === currentId)
+    const previous = index >= 0 ? data[index + 1] : undefined
+    if (!previous) {
+      compareError.value = '没有更早的同股报告可对比'
+      return
+    }
+    await router.push({
+      path: '/reports/compare',
+      query: { ids: `${currentId},${previous.id}` },
+    })
+  } catch (err) {
+    compareError.value = getErrorMessage(err, '读取上一份报告失败')
+  } finally {
+    compareBusy.value = false
+  }
 }
 
 async function load(id: string): Promise<void> {
@@ -187,50 +221,79 @@ watch(
     </div>
 
     <template v-else>
-      <section class="mt-4 flex flex-wrap items-start justify-between gap-4">
-        <div>
-          <div class="flex flex-wrap items-center gap-2">
-            <h1 class="text-[24px] font-semibold tracking-tight text-ink">{{ report.name }}</h1>
-            <span class="text-xs tabular-nums text-ink-3">{{ report.symbol }}</span>
-            <span v-if="decision" class="rounded-md px-2.5 py-1 text-sm font-semibold" :class="decisionBadgeClass">
-              {{ decision.rating }}
-            </span>
-          </div>
-          <div class="mt-2 flex flex-wrap items-baseline gap-x-3 gap-y-1">
-            <span class="text-[28px] font-semibold leading-none tabular-nums" :class="priceTone">
-              {{ report.price == null ? '—' : report.price.toFixed(2) }}
-            </span>
-            <span class="text-sm font-medium tabular-nums" :class="priceTone">
-              {{ report.change_pct == null ? '—' : `${report.change_pct > 0 ? '+' : ''}${report.change_pct.toFixed(2)}%` }}
-            </span>
-            <span class="text-xs text-ink-3">生成于 {{ formatTime(createdAt) }}</span>
-            <span
-              class="inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[11px] font-medium"
-              :class="
-                report.web_search_used
-                  ? 'border-primary/20 bg-primary-soft text-primary'
-                  : 'border-line bg-surface text-ink-3'
-              "
-            >
-              <svg
-                class="size-3 shrink-0"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                stroke-width="2"
-                aria-hidden="true"
+      <div ref="reportRoot">
+      <section class="mt-4 rounded-lg border border-line bg-canvas p-5">
+        <div class="flex flex-wrap items-start justify-between gap-3">
+          <div class="min-w-0">
+            <div class="flex flex-wrap items-center gap-2">
+              <h1 class="text-[24px] font-semibold tracking-tight text-ink">{{ report.name }}</h1>
+              <span class="text-xs tabular-nums text-ink-3">{{ report.symbol }}</span>
+              <span v-if="decision" class="rounded-md px-2.5 py-1 text-sm font-semibold" :class="decisionBadgeClass">
+                {{ decision.rating }}
+              </span>
+            </div>
+
+            <div class="mt-2 flex flex-wrap items-baseline gap-x-3 gap-y-1">
+              <span class="text-[32px] font-semibold leading-none tracking-tight tabular-nums" :class="priceTone">
+                {{ report.price == null ? '—' : report.price.toFixed(2) }}
+              </span>
+              <span class="text-sm font-medium tabular-nums" :class="priceTone">
+                {{ report.change_pct == null ? '—' : `${report.change_pct > 0 ? '+' : ''}${report.change_pct.toFixed(2)}%` }}
+              </span>
+            </div>
+
+            <div class="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1.5 text-[11px] text-ink-3">
+              <span>生成于 {{ formatTime(createdAt) }}</span>
+              <span
+                class="inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[11px] font-medium"
+                :class="
+                  report.web_search_used
+                    ? 'border-primary/20 bg-primary-soft text-primary'
+                    : 'border-line bg-surface text-ink-3'
+                "
               >
-                <circle cx="11" cy="11" r="7" />
-                <path d="m20 20-3.5-3.5" stroke-linecap="round" />
-              </svg>
-              元宝搜索 · {{ webSearchLabel }}
-            </span>
+                <svg
+                  class="size-3 shrink-0"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  aria-hidden="true"
+                >
+                  <circle cx="11" cy="11" r="7" />
+                  <path d="m20 20-3.5-3.5" stroke-linecap="round" />
+                </svg>
+                元宝搜索 · {{ webSearchLabel }}
+              </span>
+            </div>
+          </div>
+
+          <div class="flex flex-wrap gap-2" data-pdf-hide>
+            <button
+              type="button"
+              class="inline-flex h-8 items-center rounded-md border border-line-strong bg-canvas px-3 text-xs font-medium text-ink-2 transition-colors hover:border-ink-3 hover:text-ink disabled:cursor-not-allowed disabled:opacity-50"
+              :disabled="compareBusy"
+              @click="comparePrevious"
+            >
+              {{ compareBusy ? '读取中…' : '对比上一次' }}
+            </button>
+            <button
+              type="button"
+              class="inline-flex h-8 items-center rounded-md border border-line-strong bg-canvas px-3 text-xs font-medium text-ink-2 transition-colors hover:border-ink-3 hover:text-ink disabled:cursor-not-allowed disabled:opacity-50"
+              :disabled="pdfBusy"
+              @click="exportPdf"
+            >
+              {{ pdfBusy ? '导出中…' : '导出 PDF' }}
+            </button>
           </div>
         </div>
-        <div class="text-right text-[11px] leading-relaxed text-ink-3">
-          <div>报价时间 {{ formatQuoteTime(report.data_as_of) }}</div>
-          <div>数据源 {{ dataSourceText }}</div>
+
+        <div class="mt-3 flex flex-wrap items-center gap-x-5 gap-y-1 border-t border-line pt-3 text-[11px] leading-relaxed text-ink-3">
+          <span class="tabular-nums">报价时间 {{ formatQuoteTime(report.data_as_of) }}</span>
+          <span class="min-w-0">数据源 {{ dataSourceText }}</span>
         </div>
+        <p v-if="compareError" class="mt-1 text-[11px] text-warn" data-pdf-hide>{{ compareError }}</p>
+        <p v-if="pdfError" class="mt-1 text-[11px] text-warn" data-pdf-hide>{{ pdfError }}</p>
       </section>
 
       <section v-if="decision" class="mt-4 rounded-lg border border-line bg-canvas p-5">
@@ -280,7 +343,7 @@ watch(
         </div>
 
         <div class="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-6">
-          <div v-for="item in levels" :key="item.label" class="rounded-md bg-surface px-3 py-2">
+          <div v-for="item in decisionLevelItems" :key="item.label" class="rounded-md bg-surface px-3 py-2">
             <div class="text-[11px] text-ink-3">{{ item.label }}</div>
             <div class="mt-1 text-[14px] font-semibold tabular-nums" :class="item.tone">
               {{ item.value }}
@@ -337,6 +400,55 @@ watch(
         :used-by="webUsedBy"
       />
 
+      <section
+        v-if="report.analysts.length"
+        class="mt-4 rounded-lg border border-line bg-canvas p-5"
+      >
+        <div class="flex flex-wrap items-center justify-between gap-2">
+          <h2 class="text-sm font-semibold text-ink">评分概览</h2>
+          <span class="text-[11px] text-ink-3">0–100；风险维度分数越高表示风险越低</span>
+        </div>
+
+        <div class="mt-4 grid items-center gap-6 lg:grid-cols-[300px_1fr]">
+          <AnalystRadar
+            :series="[{ label: '本次分析', analysts: report.analysts }]"
+            :size="300"
+          />
+
+          <div class="grid grid-cols-2 gap-3 sm:grid-cols-3">
+            <div
+              v-for="analyst in report.analysts"
+              :key="analyst.key"
+              class="rounded-md bg-surface px-3 py-2.5"
+            >
+              <div class="flex items-center justify-between gap-2">
+                <span class="text-[11px] text-ink-3">{{ analyst.name }}</span>
+                <span
+                  class="text-[13px] font-semibold tabular-nums"
+                  :class="analystScoreTone(analyst.score)"
+                >
+                  {{ analyst.score }}
+                </span>
+              </div>
+              <div class="mt-1.5 h-1 overflow-hidden rounded-full bg-surface-2">
+                <div
+                  class="h-full rounded-full"
+                  :class="
+                    analyst.score >= 65
+                      ? 'bg-up'
+                      : analyst.score < 45
+                        ? 'bg-down'
+                        : 'bg-flat'
+                  "
+                  :style="{ width: `${Math.max(0, Math.min(100, analyst.score))}%` }"
+                />
+              </div>
+              <div class="mt-1 text-[10px] text-ink-3">{{ analyst.rating }}</div>
+            </div>
+          </div>
+        </div>
+      </section>
+
       <section class="mt-4">
         <div class="flex flex-wrap items-center justify-between gap-2">
           <h2 class="text-sm font-semibold text-ink">六位分析师</h2>
@@ -366,7 +478,7 @@ watch(
               </div>
               <div class="flex items-center gap-2">
                 <span class="text-[11px] text-ink-3">{{ analyst.rating }}</span>
-                <span class="text-[18px] font-semibold tabular-nums" :class="analystTone(analyst.score)">
+                <span class="text-[18px] font-semibold tabular-nums" :class="analystScoreTone(analyst.score)">
                   {{ analyst.score }}
                 </span>
               </div>
@@ -423,6 +535,7 @@ watch(
         <div>数据覆盖：{{ coverageLabels.join('、') }}<template v-if="dataGaps.length">；数据缺口：{{ dataGaps.join('、') }}</template>。</div>
         <div class="mt-1">{{ report.disclaimer }}</div>
       </section>
+      </div>
     </template>
   </AppShell>
 </template>

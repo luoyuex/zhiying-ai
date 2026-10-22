@@ -1,5 +1,7 @@
 /** 报告列表的格式化与配色：历史页、首页共用 */
 
+import type { PriceLevels } from '@/api/market'
+
 export function formatTime(iso: string): string {
   return new Date(iso).toLocaleTimeString('zh-CN', {
     hour: '2-digit',
@@ -26,6 +28,39 @@ export function ratingTone(rating: string): string {
   if (rating === '买入' || rating === '看多') return 'bg-up-soft text-up'
   if (rating === '卖出' || rating === '看空') return 'bg-down-soft text-down'
   return 'bg-surface-2 text-ink-2'
+}
+
+/** 分析师评分配色：越高越积极 */
+export function analystScoreTone(score: number): string {
+  if (score >= 65) return 'text-up'
+  if (score < 45) return 'text-down'
+  return 'text-ink-2'
+}
+
+export interface DecisionLevelItem {
+  label: string
+  value: string
+  tone: string
+}
+
+/** 决策价位列表；个股页可只保留入场/止盈/止损/盈亏比 */
+export function decisionLevels(
+  levels: PriceLevels | null | undefined,
+  includeSupport = true,
+): DecisionLevelItem[] {
+  if (!levels) return []
+  const items: DecisionLevelItem[] = []
+  if (includeSupport) {
+    items.push({ label: '支撑位', value: levels.support.toFixed(2), tone: 'text-ink' })
+    items.push({ label: '压力位', value: levels.resistance.toFixed(2), tone: 'text-ink' })
+  }
+  items.push(
+    { label: '建议入场', value: levels.entry.toFixed(2), tone: 'text-primary' },
+    { label: '止盈', value: levels.take_profit.toFixed(2), tone: 'text-up' },
+    { label: '止损', value: levels.stop_loss.toFixed(2), tone: 'text-down' },
+    { label: '盈亏比', value: `${levels.risk_reward.toFixed(2)} : 1`, tone: 'text-ink' },
+  )
+  return items
 }
 
 export function sourceLabel(source: string): string {

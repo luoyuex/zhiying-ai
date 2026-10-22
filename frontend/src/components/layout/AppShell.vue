@@ -78,7 +78,7 @@ watch(
 <template>
   <div class="min-h-screen bg-surface">
     <header class="sticky top-0 z-20 border-b border-line bg-canvas/85 backdrop-blur">
-      <div class="mx-auto flex h-14 max-w-[1280px] items-center gap-4 px-4 sm:px-6">
+      <div class="mx-auto flex h-14 max-w-[1280px] items-center gap-4 px-6 sm:px-8 lg:px-10">
         <RouterLink to="/" class="flex shrink-0 items-center gap-3">
           <div
             class="flex size-8 items-center justify-center rounded-md bg-primary text-sm font-semibold text-white"
@@ -86,7 +86,7 @@ watch(
             智
           </div>
           <div class="hidden text-left leading-tight sm:block">
-            <div class="text-sm font-semibold text-ink">智赢 AI</div>
+            <div class="text-sm font-semibold text-ink">智盈 AI</div>
             <div class="text-[11px] text-ink-3">A 股 AI 分析工作台</div>
           </div>
         </RouterLink>
@@ -260,7 +260,7 @@ watch(
       </div>
 
       <nav
-        class="flex h-10 items-center gap-5 overflow-x-auto border-t border-line px-4 md:hidden"
+        class="flex h-10 items-center gap-5 overflow-x-auto border-t border-line px-6 md:hidden"
       >
         <RouterLink
           v-for="item in NAV_ITEMS"
@@ -278,7 +278,7 @@ watch(
       </nav>
     </header>
 
-    <main class="mx-auto max-w-[1280px] px-4 py-6 sm:px-6 sm:py-8">
+    <main class="mx-auto max-w-[1280px] px-6 py-6 sm:px-8 sm:py-8 lg:px-10">
       <slot />
     </main>
 

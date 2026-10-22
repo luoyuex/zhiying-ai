@@ -2,7 +2,7 @@
   "name": "zhiying-ai",
   "version": "0.1.0",
   "private": true,
-  "description": "智赢 AI —— A 股 AI 分析工作台",
+  "description": "智盈 AI —— A 股 AI 分析工作台",
   "scripts": {
     "up": "docker compose up -d",
     "down": "docker compose down",

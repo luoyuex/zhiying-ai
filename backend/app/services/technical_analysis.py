@@ -402,7 +402,8 @@ def analyze_technicals(quote: Quote, bars: list[KlineBar], kline_source: str) ->
             support=support,
             resistance=resistance,
         ),
-        source=f"{quote.source} / {kline_source}",
+        # 报价与 K 线常为同一来源，去重避免界面出现「腾讯行情 / 腾讯行情」
+        source=" / ".join(dict.fromkeys([quote.source, kline_source])),
     )
 
 

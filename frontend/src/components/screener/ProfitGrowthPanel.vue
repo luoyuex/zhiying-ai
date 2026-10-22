@@ -40,6 +40,7 @@ const {
   error,
   analysis,
   job,
+  displayElapsed,
   records,
   recordsLoading,
   recordsError,
@@ -142,7 +143,7 @@ function runSelection(): void {
       class="mt-4"
       :restoring="restoring"
       :phase="job?.phase || ''"
-      :elapsed="job?.elapsed_seconds || 0"
+      :elapsed="displayElapsed"
     />
 
     <ScreenerAIResult

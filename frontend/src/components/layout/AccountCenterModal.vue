@@ -370,7 +370,7 @@ onBeforeUnmount(() => {
             </svg>
             退出登录
           </button>
-          <div class="mt-auto text-[10px] text-ink-3">智赢 AI</div>
+          <div class="mt-auto text-[10px] text-ink-3">智盈 AI</div>
         </aside>
 
         <div class="flex min-w-0 flex-1 flex-col">

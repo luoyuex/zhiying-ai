@@ -1,7 +1,7 @@
 [project]
 name = "zhiying-api"
 version = "0.1.0"
-description = "智赢 AI 后端服务"
+description = "智盈 AI 后端服务"
 requires-python = ">=3.12"
 dependencies = [
     "fastapi>=0.115.0",

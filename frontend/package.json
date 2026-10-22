@@ -11,6 +11,9 @@
   },
   "dependencies": {
     "axios": "^1.7.9",
+    "html2canvas-pro": "^2.5.2",
+    "jspdf": "^4.2.1",
+    "klinecharts": "^9.8.12",
     "pinia": "^2.3.0",
     "vue": "^3.5.13",
     "vue-router": "^4.5.0"

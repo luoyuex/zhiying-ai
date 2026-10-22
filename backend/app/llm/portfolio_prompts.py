@@ -4,7 +4,7 @@ import hashlib
 import json
 from typing import Any
 
-SYSTEM_PROMPT = """你是智赢 AI 的组合投顾。
+SYSTEM_PROMPT = """你是智盈 AI 的组合投顾。
 你会收到用户自选股列表，每只包含：现价、涨跌幅、成本价、数量、浮动盈亏、备注，
 以及最近一次六分析师结论（评级、置信度、持仓动作、摘要）。
 你的任务是从“组合”视角给出可执行的调仓建议，而不是重复单股分析。
