@@ -25,7 +25,7 @@ const analysisEnabled = ref(false)
 const screenerTime = ref('17:35')
 const analysisTime = ref('17:35')
 const enabledStrategies = ref<AutomationStrategyId[]>([])
-const formValues = ref<Record<string, Record<string, number | boolean | null>>>({})
+const formValues = ref<Record<string, Record<string, number | boolean | string | null>>>({})
 
 function specById(id: AutomationStrategyId): StrategyFormSpec {
   return STRATEGY_FORM_SPECS.find((item) => item.id === id) as StrategyFormSpec
@@ -51,7 +51,7 @@ function applySettings(data: AutomationSettings): void {
   enabledStrategies.value = Object.entries(data.strategy_settings ?? {})
     .filter(([, setting]) => setting?.enabled)
     .map(([id]) => id as AutomationStrategyId)
-  const values: Record<string, Record<string, number | boolean | null>> = {}
+  const values: Record<string, Record<string, number | boolean | string | null>> = {}
   for (const spec of STRATEGY_FORM_SPECS) {
     values[spec.id] = mergeFilters(spec, data.strategy_settings?.[spec.id]?.filters)
   }
@@ -177,6 +177,20 @@ async function save(): Promise<void> {
                     type="checkbox"
                     class="size-3.5 accent-[var(--color-ink)]"
                   />
+                </span>
+                <span v-else-if="field.type === 'select'" class="flex items-center">
+                  <select
+                    v-model="formValues[spec.id][field.key]"
+                    class="rounded-md border border-line bg-canvas px-2 py-1 text-xs text-ink outline-none focus:border-ink-3"
+                  >
+                    <option
+                      v-for="option in field.options"
+                      :key="option.value"
+                      :value="option.value"
+                    >
+                      {{ option.label }}
+                    </option>
+                  </select>
                 </span>
                 <span v-else class="flex items-center gap-1">
                   <input

@@ -17,10 +17,13 @@
   --color-ink-2: #5a6069;
   --color-ink-3: #8a9099;
 
-  /* 主色 */
-  --color-primary: #2f5af3;
-  --color-primary-hover: #2447cc;
-  --color-primary-soft: #edf1fe;
+  /* 主色：墨黑（全站唯一强调色，黑白灰体系；不引入第二强调色） */
+  --color-primary: #16181d;
+  --color-primary-hover: #2b2f36;
+  --color-primary-soft: #eceef1;
+
+  /* 图表指标线：与正文墨黑区分开，避免 MA 线粘连文字色 */
+  --color-chart-line: #16181d;
 
   /* 涨跌与状态 */
   --color-up: #e0424a;

@@ -163,7 +163,7 @@ function switchMode(next: 'password' | 'code'): void {
     </form>
 
     <div class="mt-6 flex items-center justify-between text-[13px]">
-      <router-link to="/register" class="font-medium text-primary hover:text-primary-hover">
+      <router-link to="/register" class="font-medium text-primary underline-offset-2 hover:text-primary-hover hover:underline">
         注册新账号
       </router-link>
       <router-link to="/forgot-password" class="text-ink-2 hover:text-ink">

@@ -159,13 +159,13 @@ watch(() => route.query.ids, () => void load(), { immediate: true })
         <div class="flex flex-wrap gap-2 text-[11px] text-ink-3">
           <RouterLink
             :to="{ path: `/reports/${newer.id}`, query: { from: 'reports' } }"
-            class="font-medium text-primary hover:text-primary-hover"
+            class="font-medium text-primary underline-offset-2 hover:text-primary-hover hover:underline"
           >
             查看较新报告 →
           </RouterLink>
           <RouterLink
             :to="{ path: `/reports/${older.id}`, query: { from: 'reports' } }"
-            class="font-medium text-primary hover:text-primary-hover"
+            class="font-medium text-primary underline-offset-2 hover:text-primary-hover hover:underline"
           >
             查看较早报告 →
           </RouterLink>

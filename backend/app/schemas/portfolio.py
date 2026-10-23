@@ -1,5 +1,6 @@
 """组合 AI 诊断接口模型。"""
 
+import uuid
 from datetime import datetime
 from typing import Literal
 
@@ -86,8 +87,23 @@ class PortfolioDiagnosisDraft(BaseModel):
 
 
 class PortfolioDiagnosisResponse(PortfolioDiagnosisDraft):
+    id: uuid.UUID | None = None
     generated_at: datetime
     model: str
     quota_used: int = 0
     quota_limit: int = 0
     disclaimer: str = "组合诊断由 AI 基于自选股与持仓数据生成，仅供研究参考，不构成投资建议。"
+
+
+class PortfolioDiagnosisSummary(BaseModel):
+    id: uuid.UUID
+    health_score: int
+    position_count: int
+    summary: str
+    created_at: datetime
+
+
+class PortfolioDiagnosisDetail(BaseModel):
+    id: uuid.UUID
+    created_at: datetime
+    report: PortfolioDiagnosisResponse

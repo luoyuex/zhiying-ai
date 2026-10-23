@@ -3,7 +3,7 @@ import { createRouter, createWebHistory } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 
 const router = createRouter({
-  history: createWebHistory(),
+  history: createWebHistory(`${import.meta.env.BASE_URL}app/`),
   scrollBehavior: () => ({ top: 0 }),
   routes: [
     {
@@ -59,6 +59,12 @@ const router = createRouter({
       name: 'report-compare',
       component: () => import('@/pages/ReportComparePage.vue'),
       meta: { requiresAuth: true, title: '报告对比' },
+    },
+    {
+      path: '/reports/portfolio/:id',
+      name: 'portfolio-diagnosis',
+      component: () => import('@/pages/PortfolioDiagnosisDetailPage.vue'),
+      meta: { requiresAuth: true, title: '组合诊断' },
     },
     {
       path: '/reports/:id',

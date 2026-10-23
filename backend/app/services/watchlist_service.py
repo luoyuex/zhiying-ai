@@ -11,14 +11,17 @@ from app.db.models.stock import Stock
 from app.db.models.watchlist import WatchlistItem
 from app.db.session import SessionLocal
 from app.llm.client import LLMNotConfiguredError
-from app.providers.symbols import InvalidSymbolError, parse_symbol
+from app.providers.symbols import InvalidSymbolError, StockSymbol, parse_symbol
 from app.schemas.watchlist import LatestAnalysis, WatchlistBatchResult, WatchlistEntry
 from app.services.ai_job_service import AIWorkerUnavailableError, start_ai_job
 from app.services.market_service import MarketDataService
+from app.services.quote_batch import fetch_quotes
 
 logger = get_logger(__name__)
 
 MAX_WATCHLIST = 50
+# 批量报价缺个别时，最多用单只链路补这么多只，避免请求量反弹
+QUOTE_FALLBACK_MAX = 5
 
 
 class WatchlistLimitError(Exception):
@@ -147,15 +150,35 @@ async def list_watchlist(
             created_at=row.created_at,
         )
 
-    quotes = await asyncio.gather(
-        *(market.get_quote(symbol) for symbol in symbols),
-        return_exceptions=True,
-    )
+    # 腾讯批量报价：50 只以内只需 1 个请求，避免逐只请求打满令牌桶
+    parsed: list[StockSymbol] = []
+    for code in symbols:
+        try:
+            parsed.append(parse_symbol(code))
+        except InvalidSymbolError:
+            logger.info("自选股代码无效，跳过行情 %s", code)
+
+    quotes = await fetch_quotes(parsed)
+
+    # 批量缺个别（停牌/新股/解析失败）时，少量股票再走单只链路兜底；
+    # 缺太多说明批量接口本身异常，逐只补会把请求量放大回去，直接跳过。
+    missing = [item for item in parsed if item.code not in quotes]
+    if missing and len(missing) <= QUOTE_FALLBACK_MAX:
+        fallback = await asyncio.gather(
+            *(market.get_quote(item.code) for item in missing),
+            return_exceptions=True,
+        )
+        for item, quote in zip(missing, fallback, strict=True):
+            if not isinstance(quote, BaseException):
+                quotes[item.code] = quote
+
+    await market.prime_quotes(quotes)
 
     entries: list[WatchlistEntry] = []
-    for row, quote in zip(rows, quotes, strict=True):
-        if isinstance(quote, BaseException):
-            logger.info("自选股行情获取失败 %s: %s", row.symbol, quote)
+    for row in rows:
+        quote = quotes.get(row.symbol)
+        if quote is None:
+            logger.info("自选股行情获取失败 %s", row.symbol)
             entries.append(
                 WatchlistEntry(
                     symbol=row.symbol,

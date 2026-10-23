@@ -3,12 +3,13 @@ import type { AutomationStrategyId } from '@/api/automation'
 export interface StrategyFieldSpec {
   key: string
   label: string
-  type: 'number' | 'boolean'
-  default: number | boolean | null
+  type: 'number' | 'boolean' | 'select'
+  default: number | boolean | string | null
   min?: number
   max?: number
   step?: number
   suffix?: string
+  options?: { label: string; value: string }[]
 }
 
 export interface StrategyFormSpec {
@@ -31,10 +32,24 @@ export const STRATEGY_FORM_SPECS: StrategyFormSpec[] = [
   {
     id: 'main_force',
     name: '主力追踪',
-    description: '按超大单净流入排行筛选强势标的',
+    description: '按所选区间主力净流入排行 + 市值区间筛选',
     fields: [
       { key: 'final_n', label: '精选数量', type: 'number', default: 5, min: 3, max: 10 },
-      { key: 'max_change_pct', label: '涨幅上限', type: 'number', default: 7, min: -20, max: 30, suffix: '%' },
+      {
+        key: 'window',
+        label: '统计区间',
+        type: 'select',
+        default: '10d',
+        options: [
+          { label: '今日', value: 'today' },
+          { label: '近 3 日', value: '3d' },
+          { label: '近 5 日', value: '5d' },
+          { label: '近 10 日', value: '10d' },
+        ],
+      },
+      { key: 'max_change_pct', label: '区间涨幅上限', type: 'number', default: 30, min: -100, max: 500, suffix: '%' },
+      { key: 'min_market_cap', label: '总市值下限', type: 'number', default: 50, min: 1, max: 50000, suffix: '亿' },
+      { key: 'max_market_cap', label: '总市值上限', type: 'number', default: 5000, min: 1, max: 50000, suffix: '亿' },
       { key: 'min_price', label: '最低价', type: 'number', default: null, min: 0, suffix: '元' },
       { key: 'max_price', label: '最高价', type: 'number', default: null, min: 0, suffix: '元' },
       ...EXCLUDE_FIELDS,
@@ -92,12 +107,18 @@ export const STRATEGY_FORM_SPECS: StrategyFormSpec[] = [
 export function mergeFilters(
   spec: StrategyFormSpec,
   filters: Record<string, unknown> | undefined,
-): Record<string, number | boolean | null> {
-  const result: Record<string, number | boolean | null> = {}
+): Record<string, number | boolean | string | null> {
+  const result: Record<string, number | boolean | string | null> = {}
   for (const field of spec.fields) {
     const raw = filters?.[field.key]
     if (field.type === 'boolean') {
       result[field.key] = typeof raw === 'boolean' ? raw : Boolean(field.default)
+    } else if (field.type === 'select') {
+      const values = (field.options ?? []).map((option) => option.value)
+      result[field.key] =
+        typeof raw === 'string' && values.includes(raw)
+          ? raw
+          : String(field.default ?? values[0] ?? '')
     } else if (raw === null || raw === undefined || raw === '') {
       result[field.key] = field.default as number | null
     } else {

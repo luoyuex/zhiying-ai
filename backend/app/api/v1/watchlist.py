@@ -1,6 +1,8 @@
 """自选股接口。"""
 
-from fastapi import APIRouter, Depends, Response
+import uuid
+
+from fastapi import APIRouter, Depends, Query, Response
 from pydantic import ValidationError
 from redis.asyncio import Redis
 
@@ -16,7 +18,11 @@ from app.llm.client import (
     LLMResponseError,
 )
 from app.providers.symbols import InvalidSymbolError, parse_symbol
-from app.schemas.portfolio import PortfolioDiagnosisResponse
+from app.schemas.portfolio import (
+    PortfolioDiagnosisDetail,
+    PortfolioDiagnosisResponse,
+    PortfolioDiagnosisSummary,
+)
 from app.schemas.watchlist import (
     WatchlistAddRequest,
     WatchlistAddResponse,
@@ -29,6 +35,11 @@ from app.schemas.watchlist import (
 from app.services.ai_analysis_service import QuotaExceededError, QuotaServiceError
 from app.services.market_service import MarketDataService
 from app.services.portfolio_service import PortfolioEmptyError, diagnose_portfolio
+from app.services.report_history_service import (
+    get_latest_portfolio_diagnosis,
+    get_portfolio_diagnosis,
+    list_portfolio_diagnoses,
+)
 from app.services.watchlist_service import (
     MAX_WATCHLIST,
     WatchlistLimitError,
@@ -146,6 +157,44 @@ async def portfolio_diagnosis(
         raise errors.llm_error() from exc
     except ValidationError as exc:
         raise errors.llm_invalid_response() from exc
+
+
+@router.get(
+    "/portfolio-analysis/history",
+    response_model=list[PortfolioDiagnosisSummary],
+    summary="组合诊断历史",
+)
+async def portfolio_history(
+    limit: int = Query(20, ge=1, le=50),
+    user: User = Depends(get_current_user),
+) -> list[PortfolioDiagnosisSummary]:
+    return await list_portfolio_diagnoses(user.id, limit=limit)
+
+
+@router.get(
+    "/portfolio-analysis/latest",
+    response_model=PortfolioDiagnosisDetail | None,
+    summary="最近一次组合诊断",
+)
+async def portfolio_latest(
+    user: User = Depends(get_current_user),
+) -> PortfolioDiagnosisDetail | None:
+    return await get_latest_portfolio_diagnosis(user.id)
+
+
+@router.get(
+    "/portfolio-analysis/history/{record_id}",
+    response_model=PortfolioDiagnosisDetail,
+    summary="组合诊断详情",
+)
+async def portfolio_history_detail(
+    record_id: uuid.UUID,
+    user: User = Depends(get_current_user),
+) -> PortfolioDiagnosisDetail:
+    detail = await get_portfolio_diagnosis(user.id, record_id)
+    if detail is None:
+        raise errors.not_found("组合诊断记录不存在")
+    return detail
 
 
 @router.get("/{symbol}", response_model=WatchlistStatus, summary="是否已自选")

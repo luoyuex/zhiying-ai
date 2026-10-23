@@ -55,6 +55,8 @@ def setup_logging(debug: bool = False, *, filename: str | None = None) -> None:
 
     logging.getLogger("uvicorn.access").setLevel(logging.INFO if debug else logging.WARNING)
     logging.getLogger("sqlalchemy.engine").setLevel(logging.WARNING)
+    # httpx 默认在 INFO 打印完整 URL；代理提取链接带 vkey，不能让密钥进日志
+    logging.getLogger("httpx").setLevel(logging.WARNING)
 
 
 def get_logger(name: str) -> logging.Logger:

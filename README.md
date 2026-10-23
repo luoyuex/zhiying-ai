@@ -17,6 +17,8 @@ A 股 AI 分析工作台。前端 Vue 3 + TypeScript，后端 FastAPI + PostgreS
 - 接口：`/api/v1/stocks/{symbol}/quote`、`/kline`、`/analysis`、`/ai-analysis`、`/api/v1/ai/jobs/{id}`、`/api/v1/analysis/reports`
 
 > 📋 完整的开发计划、已完成/未完成清单与风险登记见 **[docs/DEVELOPMENT_PLAN.md](docs/DEVELOPMENT_PLAN.md)**。
+>
+> 生产部署（Nginx 同域反代 + HTTPS + systemd + Docker）见 **[docs/DEPLOYMENT.md](docs/DEPLOYMENT.md)**。
 
 ---
 
@@ -80,7 +82,7 @@ npm install
 npm run dev
 ```
 
-打开 <http://localhost:5288>，Vite 已把 `/api` 代理到 `127.0.0.1:8010`。
+打开 <http://localhost:5288> 是产品官网；进入工作台用 <http://localhost:5288/app/>，登录页为 `/app/login`。Vite 已把 `/api` 代理到 `127.0.0.1:8010`。
 
 根目录也可以用 `npm run api` / `npm run web` 启动（等价命令）。
 
@@ -148,7 +150,7 @@ LLM_CACHE_SECONDS=21600
 
 > 分析流程：六位分析师并发 → 团队讨论（LLM 整理 4-6 轮交叉回应）→ 首席策略官决策。任一步失败会自动回退到规则版，并在报告中标记 `engine=rule` / `source=rule`。整份报告仍只消耗 1 次额度。
 >
-> 任务执行：默认 `AI_JOB_EXECUTION=arq`，由 `npm run worker` 消费；API 重启不会中断分析，worker 优雅重启会等待在跑任务结束。worker 每 30 秒写入心跳 `ai:worker:alive`（TTL 120 秒），没有心跳时新任务直接返回 503。
+> 任务执行：默认 `AI_JOB_EXECUTION=arq`，由 `npm run worker` 消费；API 重启不会中断分析，但 worker 重启会取消进行中的任务（当前未配置 `job_completion_wait`），请在低峰发布。worker 每 30 秒写入心跳 `ai:worker:alive`（TTL 120 秒），没有心跳时新任务直接返回 503。
 
 ---
 
@@ -197,7 +199,8 @@ WSA_SEARCH_URL=https://api.wsa.cloud.tencent.com/SearchPro
 先检查配置（不发起调用、不产生费用）：
 
 ```powershell
-cd D:\code\AI\zhiying-ai\backend
+# 在项目根目录执行
+cd backend
 .\.venv\Scripts\python.exe manual_test_wsa.py
 ```
 
@@ -230,17 +233,31 @@ zhiying-ai/
 │  ├─ alembic/                数据库迁移
 │  └─ tests/                  端到端测试（跑真实 PG + Redis）
 ├─ frontend/
+│  ├─ index.html              产品官网（静态内容，面向 SEO/GEO）
+│  ├─ app.html                Vue 工作台入口
+│  ├─ public/                 favicon / robots.txt / llms.txt / OG 分享图
 │  └─ src/
+│     ├─ marketing/           官网交互（菜单、滚动揭示、分析师轮播）
 │     ├─ api/                 axios 客户端（401 单飞续期）+ 认证 / 行情接口
 │     ├─ stores/auth.ts       Pinia 会话
-│     ├─ router/              路由与守卫
+│     ├─ router/              路由与守卫（base: /app/）
 │     ├─ components/          UI 基础组件 + 布局 + market（行情速查 / 迷你 K 线）
 │     ├─ pages/               登录 / 注册 / 重置密码 / 工作台 / 个股详情 / 历史报告 / 分析报告
-│     └─ styles/              设计 token（浅色清爽数据风）
+│     └─ styles/              设计 token（应用）+ marketing.css（官网）
 ├─ docker-compose.yml         本地 PostgreSQL + Redis
 ├─ docs/ARCHITECTURE.md       架构说明
 └─ .env.example               配置模板
 ```
+
+---
+
+## 官网与 SEO / GEO
+
+- `/` 是独立静态官网，正文不依赖 JavaScript 渲染；工作台在 `/app/`，`app.html` 带 `noindex`，不会被搜索引擎收录。
+- 已内置：语义化 HTML、title/meta description、canonical、Open Graph / Twitter Card、Organization / WebSite / WebPage / SoftwareApplication / FAQPage 结构化数据、`robots.txt`、`llms.txt`（面向 AI 检索的站点摘要）。
+- 官网的交互逻辑在 `frontend/src/marketing/`，样式在 `frontend/src/styles/marketing.css`。
+- **上线前**：把 `frontend/index.html` 里的 canonical、`og:image`、`twitter:image` 改成正式域名的绝对地址（当前为相对路径），并基于正式域名补一份 `sitemap.xml`，把首页地址写进去。`robots.txt` 已允许搜索引擎与 AI 爬虫抓取官网，并禁止抓取 `/app/` 与 `/api/`。
+- 生产部署到 Nginx 时，官网与工作台需要分开回退：`/app` 及 `/app/*` 回退到 `app.html`，其余路径回退到 `index.html`，否则刷新工作台深链会落到官网。
 
 ---
 

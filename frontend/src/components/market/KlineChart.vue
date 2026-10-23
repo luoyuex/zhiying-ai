@@ -49,7 +49,7 @@ function buildStyles() {
   const line = readToken('--color-line') || '#e6e8eb'
   const ink2 = readToken('--color-ink-2') || '#5a6069'
   const ink3 = readToken('--color-ink-3') || '#8a9099'
-  const primary = readToken('--color-primary') || '#2f5af3'
+  const primary = readToken('--color-chart-line') || '#16181d'
   const warn = readToken('--color-warn') || '#c08a2e'
   const surface = readToken('--color-surface') || '#f7f8fa'
 

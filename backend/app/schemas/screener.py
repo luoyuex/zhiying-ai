@@ -4,24 +4,28 @@ import uuid
 from datetime import datetime
 from typing import Literal
 
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 
 from app.schemas.ai import AIJobStatus
 
 ScreenerStrategyId = Literal[
     "main_force", "low_price_bull", "small_cap", "profit_growth", "value_stock"
 ]
+FlowWindow = Literal["today", "3d", "5d", "10d"]
 
 
 class FundFlowRankItem(BaseModel):
     symbol: str
     name: str
     price: float | None = None
+    # 所选区间的涨跌幅（今日/3日/5日/10日）
     change_pct: float | None = None
-    # 超大单净流入（元）；新浪资金流排行口径
+    # 所选区间的主力净流入（元）
     main_net: float = 0.0
     main_net_pct: float | None = None
     amount: float | None = None
+    # 总市值（元）
+    market_cap: float | None = None
 
 
 class PerformanceRow(BaseModel):
@@ -74,7 +78,7 @@ class MainForceAnalysisResponse(BaseModel):
     quota_used: int = 0
     quota_limit: int = 0
     analyzed_count: int = 0
-    source: str = "sina_fundflow+eastmoney_performance+tencent"
+    source: str = "eastmoney_fundflow+eastmoney_performance+tencent"
     disclaimer: str = (
         "AI 分析基于公开资金流、行业与财务数据，仅供研究参考，不构成投资建议。"
     )
@@ -256,14 +260,24 @@ class ScreenerStrategy(BaseModel):
 
 
 class MainForceScreenRequest(BaseModel):
-    top_n: int = Field(default=10, ge=3, le=50)
-    max_change_pct: float | None = Field(default=7.0, ge=-20, le=30)
+    top_n: int = Field(default=10, ge=3, le=100)
+    window: FlowWindow = "10d"
+    # 区间涨跌幅上限；参考项目默认 30%
+    max_change_pct: float | None = Field(default=30.0, ge=-100, le=500)
+    min_market_cap: float = Field(default=50.0, gt=0, le=50000)
+    max_market_cap: float = Field(default=5000.0, gt=0, le=50000)
     min_price: float | None = Field(default=None, ge=0)
     max_price: float | None = Field(default=None, ge=0)
     exclude_st: bool = True
     exclude_gem: bool = True
     exclude_star: bool = True
     exclude_bj: bool = True
+
+    @model_validator(mode="after")
+    def validate_market_cap_range(self) -> "MainForceScreenRequest":
+        if self.min_market_cap > self.max_market_cap:
+            raise ValueError("最小市值不能大于最大市值")
+        return self
 
 
 class MainForceAnalysisRequest(MainForceScreenRequest):
@@ -276,7 +290,7 @@ class MainForceScreenResponse(BaseModel):
     scanned_count: int = 0
     candidate_count: int = 0
     fetched_at: datetime
-    source: str = "sina_fundflow"
+    source: str = "eastmoney_fundflow"
     filters: dict = Field(default_factory=dict)
     disclaimer: str = (
         "选股结果基于公开资金流数据与简单规则筛选，仅供研究参考，不构成投资建议。"

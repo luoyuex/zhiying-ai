@@ -1,17 +1,22 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
-import { useRouter } from 'vue-router'
+import { computed, onMounted, ref, watch } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
 
 import { reportsApi, type ReportSummary } from '@/api/reports'
+import { watchlistApi, type PortfolioDiagnosisSummary } from '@/api/watchlist'
 import AppShell from '@/components/layout/AppShell.vue'
 import ReportListItem from '@/components/report/ReportListItem.vue'
 import ReportListSkeleton from '@/components/report/ReportListSkeleton.vue'
 import Button from '@/components/ui/Button.vue'
 import Input from '@/components/ui/Input.vue'
 import { getErrorMessage } from '@/utils/errors'
-import { dayLabel } from '@/utils/report'
+import { dayLabel, formatFullDateTime } from '@/utils/report'
 
+type ReportTab = 'stock' | 'portfolio'
+
+const route = useRoute()
 const router = useRouter()
+const activeTab = ref<ReportTab>(route.query.tab === 'portfolio' ? 'portfolio' : 'stock')
 const reports = ref<ReportSummary[]>([])
 const loading = ref(false)
 const error = ref('')
@@ -19,7 +24,48 @@ const keyword = ref('')
 const selectMode = ref(false)
 const selected = ref<ReportSummary[]>([])
 
+const portfolioReports = ref<PortfolioDiagnosisSummary[]>([])
+const portfolioLoading = ref(false)
+const portfolioError = ref('')
+const portfolioLoaded = ref(false)
+
 const selectedIds = computed(() => new Set(selected.value.map((item) => item.id)))
+
+function setTab(tab: ReportTab): void {
+  activeTab.value = tab
+  void router.replace({ query: tab === 'portfolio' ? { tab: 'portfolio' } : {} })
+}
+
+async function loadPortfolio(): Promise<void> {
+  if (portfolioLoading.value) return
+  portfolioLoading.value = true
+  portfolioError.value = ''
+  try {
+    const { data } = await watchlistApi.portfolioHistory(50)
+    portfolioReports.value = data
+    portfolioLoaded.value = true
+  } catch (err) {
+    portfolioError.value = getErrorMessage(err, '组合诊断记录加载失败')
+  } finally {
+    portfolioLoading.value = false
+  }
+}
+
+watch(
+  activeTab,
+  (tab) => {
+    if (tab === 'portfolio' && !portfolioLoaded.value) void loadPortfolio()
+  },
+  { immediate: true },
+)
+
+watch(
+  () => route.query.tab,
+  (value) => {
+    const tab: ReportTab = value === 'portfolio' ? 'portfolio' : 'stock'
+    if (tab !== activeTab.value) activeTab.value = tab
+  },
+)
 
 function toggleSelect(item: ReportSummary): void {
   const index = selected.value.findIndex((entry) => entry.id === item.id)
@@ -109,21 +155,34 @@ onMounted(() => {
 
     <section class="mt-4 flex flex-wrap items-end justify-between gap-4">
       <div>
-        <p class="text-[13px] text-ink-3">所有个股的 AI 分析记录</p>
+        <p class="text-[13px] text-ink-3">
+          {{ activeTab === 'stock' ? '所有个股的 AI 分析记录' : '自选组合的 AI 诊断记录' }}
+        </p>
         <h1 class="mt-1 text-[24px] font-semibold tracking-tight text-ink">历史报告</h1>
       </div>
-      <div v-if="reports.length" class="flex gap-5 text-right text-[11px] text-ink-3">
-        <div>
-          <div class="text-[20px] font-semibold leading-none tabular-nums text-ink">
-            {{ reports.length }}
+      <div
+        v-if="activeTab === 'stock' ? reports.length : portfolioReports.length"
+        class="flex gap-5 text-right text-[11px] text-ink-3"
+      >
+        <template v-if="activeTab === 'stock'">
+          <div>
+            <div class="text-[20px] font-semibold leading-none tabular-nums text-ink">
+              {{ reports.length }}
+            </div>
+            <div class="mt-1">份报告</div>
           </div>
-          <div class="mt-1">份报告</div>
-        </div>
-        <div>
-          <div class="text-[20px] font-semibold leading-none tabular-nums text-ink">
-            {{ stockCount }}
+          <div>
+            <div class="text-[20px] font-semibold leading-none tabular-nums text-ink">
+              {{ stockCount }}
+            </div>
+            <div class="mt-1">只股票</div>
           </div>
-          <div class="mt-1">只股票</div>
+        </template>
+        <div v-else>
+          <div class="text-[20px] font-semibold leading-none tabular-nums text-ink">
+            {{ portfolioReports.length }}
+          </div>
+          <div class="mt-1">次诊断</div>
         </div>
       </div>
     </section>
@@ -132,16 +191,42 @@ onMounted(() => {
       <div
         class="flex flex-col gap-3 border-b border-line px-4 py-3 sm:flex-row sm:items-center sm:justify-between"
       >
-        <div class="flex items-center gap-2">
-          <h2 class="text-sm font-semibold text-ink">全部分析</h2>
+        <div class="flex flex-wrap items-center gap-2">
+          <div class="flex rounded-md bg-surface p-0.5 text-xs">
+            <button
+              type="button"
+              class="rounded px-2.5 py-1 transition-colors"
+              :class="activeTab === 'stock' ? 'bg-canvas text-ink shadow-sm' : 'text-ink-3 hover:text-ink'"
+              @click="setTab('stock')"
+            >
+              个股分析
+            </button>
+            <button
+              type="button"
+              class="rounded px-2.5 py-1 transition-colors"
+              :class="activeTab === 'portfolio' ? 'bg-canvas text-ink shadow-sm' : 'text-ink-3 hover:text-ink'"
+              @click="setTab('portfolio')"
+            >
+              组合诊断
+            </button>
+          </div>
           <span
-            v-if="reports.length"
+            v-if="activeTab === 'stock' && reports.length"
             class="rounded-full bg-surface-2 px-2 py-0.5 text-[11px] text-ink-3"
           >
             {{ filtered.length }} 条
           </span>
+          <span
+            v-else-if="activeTab === 'portfolio' && portfolioReports.length"
+            class="rounded-full bg-surface-2 px-2 py-0.5 text-[11px] text-ink-3"
+          >
+            {{ portfolioReports.length }} 条
+          </span>
         </div>
-        <div class="flex w-full flex-wrap items-center gap-2 sm:w-auto">
+        <div
+          v-if="activeTab === 'stock'"
+          class="flex w-full flex-wrap items-center gap-2 sm:w-auto"
+        >
           <Input
             v-model="keyword"
             class="min-w-0 flex-1 sm:w-64 sm:flex-none"
@@ -162,55 +247,111 @@ onMounted(() => {
         </div>
       </div>
 
-      <p v-if="selectMode" class="border-b border-line bg-surface/60 px-4 py-2 text-[11px] text-ink-3">
+      <p
+        v-if="selectMode && activeTab === 'stock'"
+        class="border-b border-line bg-surface/60 px-4 py-2 text-[11px] text-ink-3"
+      >
         点击报告进行选择，需选择同一只股票的两份报告；切换股票会重置选择。
       </p>
 
-      <ReportListSkeleton v-if="loading" />
+      <template v-if="activeTab === 'stock'">
+        <ReportListSkeleton v-if="loading" />
 
-      <div v-else-if="error" class="px-4 py-10 text-center">
-        <p class="text-sm text-danger">{{ error }}</p>
-        <Button variant="secondary" size="sm" class="mt-3" @click="load">重新加载</Button>
-      </div>
-
-      <div
-        v-else-if="!reports.length"
-        class="px-4 py-14 text-center"
-      >
-        <div class="text-sm font-medium text-ink">还没有分析报告</div>
-        <p class="mt-1 text-xs text-ink-3">
-          在个股详情页完成一次 AI 分析后，报告会自动保存在这里。
-        </p>
-        <Button variant="secondary" size="sm" class="mt-4" @click="router.push('/')">
-          去查询股票
-        </Button>
-      </div>
-
-      <div
-        v-else-if="!filtered.length"
-        class="px-4 py-12 text-center text-xs text-ink-3"
-      >
-        没有匹配「{{ keyword.trim() }}」的报告
-      </div>
-
-      <div v-else>
-        <div v-for="group in groups" :key="group.key">
-          <div
-            class="border-b border-line bg-surface/60 px-4 py-2 text-[11px] font-medium text-ink-3"
-          >
-            {{ group.label }}
-          </div>
-          <ReportListItem
-            v-for="item in group.items"
-            :key="item.id"
-            :item="item"
-            from="reports"
-            :selectable="selectMode"
-            :selected="selectedIds.has(item.id)"
-            @toggle="toggleSelect(item)"
-          />
+        <div v-else-if="error" class="px-4 py-10 text-center">
+          <p class="text-sm text-danger">{{ error }}</p>
+          <Button variant="secondary" size="sm" class="mt-3" @click="load">重新加载</Button>
         </div>
-      </div>
+
+        <div
+          v-else-if="!reports.length"
+          class="px-4 py-14 text-center"
+        >
+          <div class="text-sm font-medium text-ink">还没有分析报告</div>
+          <p class="mt-1 text-xs text-ink-3">
+            在个股详情页完成一次 AI 分析后，报告会自动保存在这里。
+          </p>
+          <Button variant="secondary" size="sm" class="mt-4" @click="router.push('/')">
+            去查询股票
+          </Button>
+        </div>
+
+        <div
+          v-else-if="!filtered.length"
+          class="px-4 py-12 text-center text-xs text-ink-3"
+        >
+          没有匹配「{{ keyword.trim() }}」的报告
+        </div>
+
+        <div v-else>
+          <div v-for="group in groups" :key="group.key">
+            <div
+              class="border-b border-line bg-surface/60 px-4 py-2 text-[11px] font-medium text-ink-3"
+            >
+              {{ group.label }}
+            </div>
+            <ReportListItem
+              v-for="item in group.items"
+              :key="item.id"
+              :item="item"
+              from="reports"
+              :selectable="selectMode"
+              :selected="selectedIds.has(item.id)"
+              @toggle="toggleSelect(item)"
+            />
+          </div>
+        </div>
+      </template>
+
+      <template v-else>
+        <div v-if="portfolioLoading" class="divide-y divide-line">
+          <div v-for="index in 3" :key="index" class="px-4 py-4">
+            <div class="h-4 w-40 animate-pulse rounded bg-surface-2" />
+            <div class="mt-2 h-3 w-full max-w-xl animate-pulse rounded bg-surface-2" />
+            <div class="mt-2 h-3 w-24 animate-pulse rounded bg-surface-2" />
+          </div>
+        </div>
+
+        <div v-else-if="portfolioError" class="px-4 py-10 text-center">
+          <p class="text-sm text-danger">{{ portfolioError }}</p>
+          <Button variant="secondary" size="sm" class="mt-3" @click="loadPortfolio">
+            重新加载
+          </Button>
+        </div>
+
+        <div v-else-if="!portfolioReports.length" class="px-4 py-14 text-center">
+          <div class="text-sm font-medium text-ink">还没有组合诊断记录</div>
+          <p class="mt-1 text-xs text-ink-3">
+            在自选股页运行一次 AI 组合诊断，结果会自动保存在这里。
+          </p>
+          <Button variant="secondary" size="sm" class="mt-4" @click="router.push('/watchlist')">
+            去自选股
+          </Button>
+        </div>
+
+        <div v-else>
+          <RouterLink
+            v-for="item in portfolioReports"
+            :key="item.id"
+            :to="`/reports/portfolio/${item.id}`"
+            class="flex items-start gap-4 border-b border-line px-4 py-3.5 transition-colors last:border-b-0 hover:bg-surface/60"
+          >
+            <div class="w-14 shrink-0">
+              <div class="text-[20px] font-semibold leading-none tabular-nums text-ink">
+                {{ item.health_score }}
+              </div>
+              <div class="mt-1 text-[10px] text-ink-3">健康度</div>
+            </div>
+            <div class="min-w-0 flex-1">
+              <p class="line-clamp-2 text-xs leading-relaxed text-ink-2">{{ item.summary }}</p>
+              <div class="mt-1.5 flex flex-wrap gap-x-3 text-[11px] text-ink-3">
+                <span>{{ formatFullDateTime(item.created_at) }}</span>
+                <span>{{ item.position_count }} 只持仓</span>
+              </div>
+            </div>
+            <span class="mt-1 shrink-0 text-xs text-ink-3">查看 →</span>
+          </RouterLink>
+        </div>
+      </template>
     </section>
   </AppShell>
 </template>

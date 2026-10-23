@@ -94,7 +94,7 @@ function onKeydown(index: number, event: KeyboardEvent): void {
       inputmode="numeric"
       maxlength="6"
       autocomplete="one-time-code"
-      class="h-full w-full min-w-0 bg-transparent text-center text-[17px] font-semibold leading-10 tabular-nums text-ink caret-primary outline-none transition-colors duration-150 focus:bg-primary-soft/70"
+      class="h-full w-full min-w-0 bg-transparent text-center text-[17px] font-semibold leading-10 tabular-nums text-ink caret-primary outline-none transition-colors duration-150 focus:bg-primary-soft"
       @input="onInput(index, $event)"
       @keydown="onKeydown(index, $event)"
       @focus="($event.target as HTMLInputElement).select()"

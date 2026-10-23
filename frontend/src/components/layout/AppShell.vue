@@ -79,12 +79,15 @@ watch(
   <div class="min-h-screen bg-surface">
     <header class="sticky top-0 z-20 border-b border-line bg-canvas/85 backdrop-blur">
       <div class="mx-auto flex h-14 max-w-[1280px] items-center gap-4 px-6 sm:px-8 lg:px-10">
-        <RouterLink to="/" class="flex shrink-0 items-center gap-3">
-          <div
-            class="flex size-8 items-center justify-center rounded-md bg-primary text-sm font-semibold text-white"
-          >
-            智
-          </div>
+        <RouterLink to="/" class="flex shrink-0 items-center gap-3" aria-label="智盈 AI 首页">
+          <img
+            src="/logo-mark-128.png"
+            alt=""
+            width="32"
+            height="32"
+            class="size-8 shrink-0"
+            aria-hidden="true"
+          />
           <div class="hidden text-left leading-tight sm:block">
             <div class="text-sm font-semibold text-ink">智盈 AI</div>
             <div class="text-[11px] text-ink-3">A 股 AI 分析工作台</div>
@@ -231,6 +234,28 @@ watch(
                   <span class="flex-1">历史报告</span>
                   <span class="text-[11px] text-ink-3">全部</span>
                 </RouterLink>
+              </div>
+
+              <div class="border-t border-line p-1.5">
+                <a
+                  href="/"
+                  role="menuitem"
+                  class="flex items-center gap-2.5 rounded-md px-2.5 py-2 text-[13px] text-ink-2 transition-colors hover:bg-surface hover:text-ink"
+                >
+                  <svg
+                    class="size-4 shrink-0"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="1.7"
+                    aria-hidden="true"
+                  >
+                    <circle cx="12" cy="12" r="8" />
+                    <path d="M4.5 12h15M12 4a13 13 0 0 1 0 16M12 4a13 13 0 0 0 0 16" />
+                  </svg>
+                  <span class="flex-1">产品官网</span>
+                  <span class="text-[11px] text-ink-3">↗</span>
+                </a>
               </div>
 
               <div class="border-t border-line p-1.5">

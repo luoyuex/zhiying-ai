@@ -39,6 +39,9 @@ class FakeMarket:
             fetched_at=now_shanghai(),
         )
 
+    async def prime_quotes(self, quotes: dict[str, Quote]) -> None:
+        return None
+
 
 async def make_user() -> User:
     user = User(email=f"watch-{uuid.uuid4().hex[:10]}@example.com", nickname="Watch")
@@ -49,9 +52,26 @@ async def make_user() -> User:
     return user
 
 
-async def test_watchlist_service_flow():
+async def test_watchlist_service_flow(monkeypatch):
     user = await make_user()
     other = await make_user()
+
+    async def fake_fetch_quotes(symbols):
+        # 000001 模拟批量接口缺失，走单只兜底后仍失败
+        return {
+            item.code: Quote(
+                symbol=item.code,
+                name=f"测试{item.code}",
+                price=10.0,
+                change_pct=1.2,
+                source="test",
+                fetched_at=now_shanghai(),
+            )
+            for item in symbols
+            if item.code != "000001"
+        }
+
+    monkeypatch.setattr(watchlist_service, "fetch_quotes", fake_fetch_quotes)
     try:
         symbol, added = await add_watchlist(
             user.id, "600519", note="核心持仓", cost_price=95.5, quantity=100
@@ -98,17 +118,24 @@ async def test_watchlist_service_flow():
 async def test_watchlist_api(monkeypatch):
     user = await make_user()
 
-    async def fake_quote(_: MarketDataService, symbol: str) -> Quote:
-        return Quote(
-            symbol=symbol,
-            name="贵州茅台",
-            price=100.0,
-            change_pct=2.5,
-            source="test",
-            fetched_at=now_shanghai(),
-        )
+    async def fake_fetch_quotes(symbols):
+        return {
+            item.code: Quote(
+                symbol=item.code,
+                name="贵州茅台",
+                price=100.0,
+                change_pct=2.5,
+                source="test",
+                fetched_at=now_shanghai(),
+            )
+            for item in symbols
+        }
 
-    monkeypatch.setattr(MarketDataService, "get_quote", fake_quote)
+    async def fake_prime(_: MarketDataService, quotes: dict[str, Quote]) -> None:
+        return None
+
+    monkeypatch.setattr(watchlist_service, "fetch_quotes", fake_fetch_quotes)
+    monkeypatch.setattr(MarketDataService, "prime_quotes", fake_prime)
     app.dependency_overrides[get_current_user] = lambda: user
     try:
         transport = ASGITransport(app=app)

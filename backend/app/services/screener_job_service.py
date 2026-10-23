@@ -416,7 +416,7 @@ async def _run_job(
             job_id,
             user_id,
             "MARKET_UNAVAILABLE",
-            "估值/行情数据暂不可用，请稍后重试",
+            "行情/资金流数据暂不可用，请稍后重试",
         )
     except Exception as exc:  # noqa: BLE001 - worker 不能静默失败
         logger.exception("选股任务失败 job_id=%s: %s", job_id, exc)

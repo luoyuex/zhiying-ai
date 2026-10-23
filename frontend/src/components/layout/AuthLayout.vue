@@ -7,17 +7,16 @@
       <div class="brand-grid pointer-events-none absolute inset-0" />
 
       <div class="relative">
-        <div class="flex items-center gap-3">
-          <div
-            class="flex size-9 items-center justify-center rounded-md bg-primary text-[15px] font-semibold text-white"
-          >
-            智
-          </div>
-          <div class="leading-tight">
-            <div class="text-[15px] font-semibold text-ink">智盈 AI</div>
-            <div class="text-xs text-ink-3">A 股 AI 分析工作台</div>
-          </div>
-        </div>
+        <a href="/" class="inline-flex flex-col gap-2.5" aria-label="返回智盈 AI 官网">
+          <img
+            src="/logo-wordmark-480.png"
+            alt="智盈 AI"
+            width="480"
+            height="165"
+            class="h-12 w-auto"
+          />
+          <span class="text-xs text-ink-3">A 股 AI 分析工作台</span>
+        </a>
       </div>
 
       <div class="relative max-w-[420px]">
@@ -51,14 +50,17 @@
     <!-- 表单区 -->
     <main class="flex min-h-screen flex-col justify-center px-6 py-10 sm:px-10">
       <div class="mx-auto w-full max-w-[400px]">
-        <div class="mb-8 flex items-center gap-2.5 lg:hidden">
-          <div
-            class="flex size-8 items-center justify-center rounded-md bg-primary text-sm font-semibold text-white"
-          >
-            智
-          </div>
+        <a href="/" class="mb-8 flex items-center gap-2.5 lg:hidden" aria-label="返回智盈 AI 官网">
+          <img
+            src="/logo-mark-128.png"
+            alt=""
+            width="32"
+            height="32"
+            class="size-8 shrink-0"
+            aria-hidden="true"
+          />
           <span class="text-sm font-semibold text-ink">智盈 AI</span>
-        </div>
+        </a>
         <slot />
       </div>
     </main>

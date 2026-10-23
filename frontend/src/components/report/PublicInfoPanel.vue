@@ -73,7 +73,7 @@ withDefaults(
             :href="source.url"
             target="_blank"
             rel="noopener noreferrer"
-            class="font-medium text-primary hover:text-primary-hover"
+            class="font-medium text-primary underline-offset-2 hover:text-primary-hover hover:underline"
           >
             {{ source.title }}
           </a>

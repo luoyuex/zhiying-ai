@@ -79,9 +79,14 @@ export interface ScreenerJobState {
   updated_at: string
 }
 
+export type FundFlowWindow = 'today' | '3d' | '5d' | '10d'
+
 export interface MainForceAnalysisRequest {
   final_n: number
+  window: FundFlowWindow
   max_change_pct?: number | null
+  min_market_cap: number
+  max_market_cap: number
   min_price?: number | null
   max_price?: number | null
   exclude_st: boolean

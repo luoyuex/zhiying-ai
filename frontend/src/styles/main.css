@@ -58,8 +58,8 @@
   /* 认证页左侧品牌区的极淡网格 */
   .brand-grid {
     background-image:
-      linear-gradient(to right, rgba(47, 90, 243, 0.06) 1px, transparent 1px),
-      linear-gradient(to bottom, rgba(47, 90, 243, 0.06) 1px, transparent 1px);
+      linear-gradient(to right, rgba(22, 24, 29, 0.05) 1px, transparent 1px),
+      linear-gradient(to bottom, rgba(22, 24, 29, 0.05) 1px, transparent 1px);
     background-size: 28px 28px;
     mask-image: radial-gradient(circle at 30% 20%, #000 0%, transparent 72%);
   }

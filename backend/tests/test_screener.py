@@ -11,7 +11,10 @@ from app.db.models.user import User
 from app.llm.client import LLMRequestError, LLMResponseError
 from app.main import app
 from app.providers.base import ProviderUnavailable, now_shanghai
-from app.providers.fund_flow_rank import SinaFundFlowRankProvider
+from app.providers.fund_flow_rank import (
+    EastmoneyFundFlowRankProvider,
+    SinaFundFlowRankProvider,
+)
 from app.providers.models import Quote
 from app.providers.performance import EastmoneyPerformanceProvider
 from app.schemas.screener import (
@@ -147,11 +150,91 @@ def test_filter_main_force_rules():
     assert [item.symbol for item in filtered] == ["603236", "000001"]
 
 
+def test_eastmoney_parse_row_windows():
+    row = {
+        "f12": "001309",
+        "f14": "德明利",
+        "f2": 247.05,
+        "f3": 1.6,
+        "f6": 5_000_000_000,
+        "f20": 78_772_547_665,
+        "f62": 900_000_000,
+        "f184": 12.3,
+        "f127": 12.98,
+        "f267": 1_012_277_408,
+        "f268": 7.01,
+        "f109": 20.4,
+        "f164": 1_628_094_688,
+        "f165": 6.69,
+        "f160": 3.53,
+        "f174": 1_096_996_817,
+        "f175": 2.97,
+    }
+
+    today = EastmoneyFundFlowRankProvider.parse_row(row, "today")
+    assert today is not None
+    assert today.change_pct == 1.6
+    assert today.main_net == 900_000_000
+    assert today.main_net_pct == 12.3
+
+    day3 = EastmoneyFundFlowRankProvider.parse_row(row, "3d")
+    assert day3 is not None
+    assert day3.change_pct == 12.98
+    assert day3.main_net == 1_012_277_408
+
+    day5 = EastmoneyFundFlowRankProvider.parse_row(row, "5d")
+    assert day5 is not None
+    assert day5.change_pct == 20.4
+    assert day5.main_net == 1_628_094_688
+
+    day10 = EastmoneyFundFlowRankProvider.parse_row(row, "10d")
+    assert day10 is not None
+    assert day10.change_pct == 3.53
+    assert day10.main_net == 1_096_996_817
+    assert day10.market_cap == 78_772_547_665
+
+
+def test_filter_main_force_market_cap_and_interval_change():
+    items = [
+        FundFlowRankItem(
+            symbol="600001",
+            name="小市值",
+            change_pct=5.0,
+            market_cap=30e8,
+        ),
+        FundFlowRankItem(
+            symbol="600002",
+            name="区间涨幅过高",
+            change_pct=35.0,
+            market_cap=100e8,
+        ),
+        FundFlowRankItem(
+            symbol="600003",
+            name="符合条件",
+            change_pct=12.0,
+            market_cap=120e8,
+        ),
+        FundFlowRankItem(
+            symbol="600004",
+            name="超大盘",
+            change_pct=8.0,
+            market_cap=6000e8,
+        ),
+    ]
+
+    filtered = screener_service.filter_main_force(
+        items,
+        MainForceScreenRequest(window="10d"),
+    )
+
+    assert [item.symbol for item in filtered] == ["600003"]
+
+
 async def test_screen_main_force(monkeypatch):
-    async def fake_fetch(self, limit: int = 300):
+    async def fake_fetch(self, window: str = "10d", limit: int = 600):
         return parse_rows()
 
-    monkeypatch.setattr(SinaFundFlowRankProvider, "fetch", fake_fetch)
+    monkeypatch.setattr(EastmoneyFundFlowRankProvider, "fetch", fake_fetch)
 
     response = await screener_service.screen_main_force(
         FakeRedis(),
@@ -563,7 +646,7 @@ class FakeAnalysisPerformanceProvider:
 
 
 async def test_main_force_analysis(monkeypatch):
-    async def fake_load(_redis):
+    async def fake_load(_redis, _window: str = "10d"):
         return ANALYSIS_ITEMS
 
     async def fake_quotes(symbols):
@@ -617,7 +700,7 @@ async def test_main_force_analysis(monkeypatch):
     )
 
     assert phases == [
-        "获取主力资金排行",
+        "获取近10日主力资金排行",
         "补充行情与业绩数据",
         "三位分析师整体分析中",
         "资深研究员精选中",
@@ -649,7 +732,7 @@ def test_normalize_recommendations_does_not_pad_with_rule_picks():
 
 
 async def test_main_force_analysis_empty(monkeypatch):
-    async def fake_load(_redis):
+    async def fake_load(_redis, _window: str = "10d"):
         return []
 
     monkeypatch.setattr(

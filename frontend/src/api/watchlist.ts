@@ -60,6 +60,7 @@ export interface PortfolioPositionAdvice {
 }
 
 export interface PortfolioDiagnosis {
+  id?: string | null
   health_score: number
   summary: string
   risk_notes: string[]
@@ -70,6 +71,20 @@ export interface PortfolioDiagnosis {
   quota_used: number
   quota_limit: number
   disclaimer: string
+}
+
+export interface PortfolioDiagnosisSummary {
+  id: string
+  health_score: number
+  position_count: number
+  summary: string
+  created_at: string
+}
+
+export interface PortfolioDiagnosisDetail {
+  id: string
+  created_at: string
+  report: PortfolioDiagnosis
 }
 
 export const watchlistApi = {
@@ -101,6 +116,22 @@ export const watchlistApi = {
     return http.post<PortfolioDiagnosis>('/watchlist/portfolio-analysis', null, {
       timeout: 200000,
     })
+  },
+
+  portfolioHistory(limit = 20) {
+    return http.get<PortfolioDiagnosisSummary[]>('/watchlist/portfolio-analysis/history', {
+      params: { limit },
+    })
+  },
+
+  portfolioLatest() {
+    return http.get<PortfolioDiagnosisDetail | null>('/watchlist/portfolio-analysis/latest')
+  },
+
+  portfolioHistoryDetail(id: string) {
+    return http.get<PortfolioDiagnosisDetail>(
+      `/watchlist/portfolio-analysis/history/${encodeURIComponent(id)}`,
+    )
   },
 
   remove(symbol: string) {

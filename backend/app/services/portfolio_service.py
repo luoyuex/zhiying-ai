@@ -22,6 +22,7 @@ from app.services.ai_analysis_service import (
     seconds_to_midnight,
 )
 from app.services.market_service import MarketDataService
+from app.services.report_history_service import save_portfolio_diagnosis
 from app.services.watchlist_service import list_watchlist
 
 logger = get_logger(__name__)
@@ -133,7 +134,7 @@ async def diagnose_portfolio(
     except Exception as exc:  # noqa: BLE001
         logger.warning("写入组合诊断额度失败: %s", exc)
 
-    return PortfolioDiagnosisResponse(
+    result = PortfolioDiagnosisResponse(
         health_score=draft.health_score,
         summary=draft.summary,
         risk_notes=draft.risk_notes,
@@ -144,3 +145,10 @@ async def diagnose_portfolio(
         quota_used=new_used,
         quota_limit=daily_quota,
     )
+    try:
+        record_id = await save_portfolio_diagnosis(user_id, result)
+    except Exception as exc:  # noqa: BLE001
+        logger.exception("保存组合诊断失败: %s", exc)
+    else:
+        result = result.model_copy(update={"id": record_id})
+    return result

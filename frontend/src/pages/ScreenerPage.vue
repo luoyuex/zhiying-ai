@@ -14,7 +14,7 @@ const strategies = ref<ScreenerStrategy[]>([
     id: 'main_force',
     name: '主力追踪',
     description:
-      'AI 三位分析师（资金流向 / 行业板块 / 财务基本面）分析主力资金靠前标的，由资深研究员精选最终结果。',
+      '按所选区间主力资金净流入排行与市值区间筛选，AI 三位分析师（资金流向 / 行业板块 / 财务基本面）整体分析后由资深研究员精选。',
     status: 'available',
   },
   {

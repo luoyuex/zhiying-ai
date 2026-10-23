@@ -1,5 +1,6 @@
 """组合 AI 诊断：持仓汇总、结果合并与接口。"""
 
+import uuid
 from datetime import datetime
 
 import pytest
@@ -14,6 +15,11 @@ from app.main import app
 from app.schemas.portfolio import PortfolioDiagnosisResponse
 from app.services.ai_analysis_service import quota_key
 from app.services.portfolio_service import PortfolioEmptyError, diagnose_portfolio
+from app.services.report_history_service import (
+    get_latest_portfolio_diagnosis,
+    get_portfolio_diagnosis,
+    list_portfolio_diagnoses,
+)
 from app.services.watchlist_service import add_watchlist
 from tests.test_watchlist import FakeMarket, make_user
 
@@ -79,6 +85,38 @@ async def test_portfolio_diagnosis_merges_positions():
         await cleanup_user(user.id)
 
 
+async def test_portfolio_diagnosis_saved_to_history():
+    user = await make_user()
+    try:
+        await add_watchlist(user.id, "600519")
+        result = await diagnose_portfolio(
+            get_redis(),
+            user.id,
+            5,
+            FakeMarket(),
+            llm_client=FakeLLM(portfolio_payload()),
+        )
+        assert result.id is not None
+
+        summaries = await list_portfolio_diagnoses(user.id, limit=10)
+        assert [item.id for item in summaries] == [result.id]
+        assert summaries[0].health_score == 72
+        assert summaries[0].position_count == 1
+        assert summaries[0].summary == result.summary
+
+        detail = await get_portfolio_diagnosis(user.id, result.id)
+        assert detail is not None
+        assert detail.report.summary == result.summary
+
+        latest = await get_latest_portfolio_diagnosis(user.id)
+        assert latest is not None
+        assert latest.id == result.id
+
+        assert await get_portfolio_diagnosis(uuid.uuid4(), result.id) is None
+    finally:
+        await cleanup_user(user.id)
+
+
 async def test_portfolio_diagnosis_requires_watchlist():
     user = await make_user()
     try:
@@ -118,6 +156,49 @@ async def test_portfolio_api(monkeypatch):
             body = response.json()
             assert body["health_score"] == 60
             assert body["summary"] == "组合整体中性。"
+    finally:
+        app.dependency_overrides.clear()
+        await cleanup_user(user.id)
+
+
+async def test_portfolio_history_api():
+    user = await make_user()
+    try:
+        await add_watchlist(user.id, "600519")
+        result = await diagnose_portfolio(
+            get_redis(),
+            user.id,
+            5,
+            FakeMarket(),
+            llm_client=FakeLLM(portfolio_payload()),
+        )
+        assert result.id is not None
+
+        app.dependency_overrides[get_current_user] = lambda: user
+        transport = ASGITransport(app=app)
+        async with AsyncClient(transport=transport, base_url="http://testserver") as client:
+            response = await client.get(
+                "/api/v1/watchlist/portfolio-analysis/history", params={"limit": 10}
+            )
+            assert response.status_code == 200, response.text
+            body = response.json()
+            assert [item["id"] for item in body] == [str(result.id)]
+            assert body[0]["health_score"] == 72
+
+            response = await client.get("/api/v1/watchlist/portfolio-analysis/latest")
+            assert response.status_code == 200, response.text
+            assert response.json()["id"] == str(result.id)
+
+            response = await client.get(
+                f"/api/v1/watchlist/portfolio-analysis/history/{result.id}"
+            )
+            assert response.status_code == 200, response.text
+            assert response.json()["report"]["summary"] == result.summary
+
+            response = await client.get(
+                f"/api/v1/watchlist/portfolio-analysis/history/{uuid.uuid4()}"
+            )
+            assert response.status_code == 404
     finally:
         app.dependency_overrides.clear()
         await cleanup_user(user.id)

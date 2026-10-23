@@ -666,7 +666,7 @@ onBeforeUnmount(() => {
       class="mt-6 rounded-lg border border-line bg-canvas px-5 py-10 text-center text-sm text-ink-2"
     >
       股票代码必须是 6 位数字。
-      <RouterLink to="/" class="ml-1 font-medium text-primary hover:text-primary-hover">
+      <RouterLink to="/" class="ml-1 font-medium text-primary underline-offset-2 hover:text-primary-hover hover:underline">
         返回首页
       </RouterLink>
     </div>
@@ -678,7 +678,7 @@ onBeforeUnmount(() => {
       {{ error }}
       <button
         type="button"
-        class="ml-2 font-medium text-primary hover:text-primary-hover"
+        class="ml-2 font-medium text-primary underline-offset-2 hover:text-primary-hover hover:underline"
         @click="loadAll(code)"
       >
         重试

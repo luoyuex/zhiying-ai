@@ -56,7 +56,27 @@ class Settings(BaseSettings):
     smtp_from_name: str = "智盈 AI"
 
     # 行情数据源
+    # 旧配置：全局出口代理。代理池关闭时作用于所有行情请求（含元宝搜索）
     egress_proxy_url: str = ""
+    # 出站代理池（P1/P2）：静态入口 / 服务商提取 API + 失败换出口 + 每出口限速
+    egress_proxy_enabled: bool = False
+    # 来源：static=固定入口/隧道；api=服务商提取接口
+    egress_proxy_source: Literal["static", "api"] = "static"
+    egress_proxy_static: str = ""
+    # API 提取源：完整提取链接（含 uid/vkey，属于密钥，不能写日志）
+    egress_proxy_api_url: str = ""
+    # 提取 IP 有效期 30s，TTL 用 25s；按服务商实际有效期调整
+    egress_proxy_api_ttl_seconds: int = 25
+    egress_proxy_api_error_cooldown_seconds: float = 5.0
+    # 隧道代理由服务商在入口后轮换 IP：被目标站封时只重试，不冷却整个入口
+    egress_proxy_rotate_per_request: bool = True
+    egress_proxy_max_attempts: int = 2
+    egress_proxy_cooldown_seconds: int = 60
+    egress_proxy_ban_seconds: int = 900
+    egress_proxy_per_ip_rate: float = 2.0
+    egress_proxy_per_ip_burst: int = 4
+    # 走代理的行情源，逗号分隔；空=全部（eastmoney/tencent/sina）
+    egress_proxy_providers: str = ""
     market_http_timeout: float = 8.0
     market_provider_timeout: float = 6.0
     market_global_concurrency: int = 8
@@ -133,6 +153,18 @@ class Settings(BaseSettings):
     @property
     def cors_origin_list(self) -> list[str]:
         return [item.strip() for item in self.cors_origins.split(",") if item.strip()]
+
+    @property
+    def egress_proxy_entries(self) -> str:
+        return self.egress_proxy_static.strip() or self.egress_proxy_url.strip()
+
+    @property
+    def egress_proxy_provider_set(self) -> set[str]:
+        return {
+            item.strip()
+            for item in self.egress_proxy_providers.split(",")
+            if item.strip()
+        }
 
     @property
     def refresh_cookie_name(self) -> str:

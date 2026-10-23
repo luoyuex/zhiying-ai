@@ -1,5 +1,6 @@
 """行情服务：统一缓存、请求合并、降级与 stale 兜底。"""
 
+import asyncio
 from collections.abc import Awaitable, Callable
 from typing import TypeVar
 
@@ -61,6 +62,20 @@ class MarketDataService:
             fresh_seconds=self._quote_fresh,
             stale_seconds=self._quote_stale,
             factory=lambda: self._registry.quote(symbol),
+        )
+
+    async def prime_quotes(self, quotes: dict[str, Quote]) -> None:
+        """把批量接口拿到的报价写进缓存，后续 get_quote 可直接命中。"""
+        if not quotes:
+            return
+        await asyncio.gather(
+            *(
+                self._cache.set(
+                    f"quote:{code}", quote.model_dump(mode="json"), self._quote_stale
+                )
+                for code, quote in quotes.items()
+            ),
+            return_exceptions=True,
         )
 
     async def get_kline(

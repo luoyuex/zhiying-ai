@@ -36,7 +36,7 @@ function handleClick(event: MouseEvent): void {
   <RouterLink
     :to="to"
     class="flex items-center gap-3 border-b border-line px-4 py-3.5 transition-colors last:border-b-0 hover:bg-surface"
-    :class="selected ? 'bg-primary-soft/40' : ''"
+    :class="selected ? 'bg-primary-soft' : ''"
     @click="handleClick"
   >
     <span

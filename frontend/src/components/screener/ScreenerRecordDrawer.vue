@@ -16,6 +16,13 @@ const emit = defineEmits<{ close: [] }>()
 
 const closeButtonRef = ref<HTMLButtonElement | null>(null)
 
+const FLOW_WINDOW_LABELS: Record<string, string> = {
+  today: '今日',
+  '3d': '近 3 日',
+  '5d': '近 5 日',
+  '10d': '近 10 日',
+}
+
 const reports = computed(() => {
   const data = props.record?.result
   if (!data) return []
@@ -33,6 +40,14 @@ const filterText = computed(() => {
   const parts: string[] = []
   const finalN = Number(filters.final_n)
   if (finalN) parts.push(`目标 ${finalN} 只`)
+  const windowValue = filters.window
+  if (typeof windowValue === 'string' && FLOW_WINDOW_LABELS[windowValue]) {
+    parts.push(`区间 ${FLOW_WINDOW_LABELS[windowValue]}`)
+  }
+  const minMarketCap = filters.min_market_cap
+  if (minMarketCap !== null && minMarketCap !== undefined) {
+    parts.push(`总市值 ≥ ${String(minMarketCap)} 亿`)
+  }
   const maxPrice = filters.max_price
   if (maxPrice !== null && maxPrice !== undefined) {
     parts.push(`股价上限 ${String(maxPrice)} 元`)
@@ -63,7 +78,8 @@ const filterText = computed(() => {
   }
   const maxChange = filters.max_change_pct
   if (maxChange !== null && maxChange !== undefined) {
-    parts.push(`涨幅上限 ${String(maxChange)}%`)
+    const label = props.record?.strategy === 'main_force' ? '区间涨幅上限' : '涨幅上限'
+    parts.push(`${label} ${String(maxChange)}%`)
   }
   const excludes: string[] = []
   if (filters.exclude_st) excludes.push('ST')

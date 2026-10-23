@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ref } from 'vue'
 
-import { type MainForceAnalysisRequest } from '@/api/screener'
+import { type FundFlowWindow, type MainForceAnalysisRequest } from '@/api/screener'
 import Select from '@/components/ui/Select.vue'
 import ScreenerAIResult from './ScreenerAIResult.vue'
 import ScreenerHistory from './ScreenerHistory.vue'
@@ -15,8 +15,18 @@ const FINAL_N_OPTIONS = [
   { label: '10 只', value: 10 },
 ]
 
+const WINDOW_OPTIONS: { label: string; value: FundFlowWindow }[] = [
+  { label: '今日', value: 'today' },
+  { label: '近 3 日', value: '3d' },
+  { label: '近 5 日', value: '5d' },
+  { label: '近 10 日', value: '10d' },
+]
+
 const finalN = ref(5)
-const maxChangePct = ref<string | number>('7')
+const window = ref<FundFlowWindow>('10d')
+const maxChangePct = ref<string | number>('30')
+const minMarketCap = ref<string | number>('50')
+const maxMarketCap = ref<string | number>('5000')
 const excludeST = ref(true)
 const excludeGEM = ref(true)
 const excludeSTAR = ref(true)
@@ -26,13 +36,28 @@ function applyFilters(filters: Record<string, unknown>): void {
   if (FINAL_N_OPTIONS.some((option) => option.value === finalNValue)) {
     finalN.value = finalNValue
   }
-  if ('max_change_pct' in filters) {
-    const value = filters.max_change_pct
-    maxChangePct.value = value === null || value === undefined ? '' : String(value)
+  // 旧记录没有 window 字段，不把旧口径（7% 涨幅、无市值区间）带回新表单
+  if (WINDOW_OPTIONS.some((option) => option.value === filters.window)) {
+    window.value = filters.window as FundFlowWindow
+    if ('max_change_pct' in filters) {
+      const value = filters.max_change_pct
+      maxChangePct.value = value === null || value === undefined ? '' : String(value)
+    }
+    if (filters.min_market_cap !== null && filters.min_market_cap !== undefined) {
+      minMarketCap.value = String(filters.min_market_cap)
+    }
+    if (filters.max_market_cap !== null && filters.max_market_cap !== undefined) {
+      maxMarketCap.value = String(filters.max_market_cap)
+    }
   }
   if (typeof filters.exclude_st === 'boolean') excludeST.value = filters.exclude_st
   if (typeof filters.exclude_gem === 'boolean') excludeGEM.value = filters.exclude_gem
   if (typeof filters.exclude_star === 'boolean') excludeSTAR.value = filters.exclude_star
+}
+
+function numberOr(value: string | number, fallback: number): number {
+  const parsed = Number(String(value).trim())
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback
 }
 
 const {
@@ -60,7 +85,10 @@ function runSelection(): void {
   const maxText = String(maxChangePct.value).trim()
   const payload: MainForceAnalysisRequest = {
     final_n: finalN.value,
+    window: window.value,
     max_change_pct: maxText === '' ? null : Number(maxText),
+    min_market_cap: numberOr(minMarketCap.value, 50),
+    max_market_cap: numberOr(maxMarketCap.value, 5000),
     exclude_st: excludeST.value,
     exclude_gem: excludeGEM.value,
     exclude_star: excludeSTAR.value,
@@ -83,13 +111,44 @@ function runSelection(): void {
           />
         </div>
 
+        <div class="flex flex-col gap-1 text-[11px] text-ink-3">
+          统计区间
+          <Select
+            v-model="window"
+            :options="WINDOW_OPTIONS"
+            :disabled="loading || restoring"
+          />
+        </div>
+
         <label class="flex flex-col gap-1 text-[11px] text-ink-3">
-          最大涨幅（%）
+          区间涨幅上限（%）
           <input
             v-model="maxChangePct"
             type="number"
             step="0.1"
             placeholder="不限制"
+            :disabled="loading || restoring"
+            class="h-9 w-24 rounded-md border border-line bg-canvas px-2.5 text-xs text-ink placeholder:text-ink-3 focus:border-line-strong focus:outline-none disabled:cursor-not-allowed disabled:bg-surface-2"
+          />
+        </label>
+
+        <label class="flex flex-col gap-1 text-[11px] text-ink-3">
+          总市值下限（亿）
+          <input
+            v-model="minMarketCap"
+            type="number"
+            step="10"
+            :disabled="loading || restoring"
+            class="h-9 w-24 rounded-md border border-line bg-canvas px-2.5 text-xs text-ink placeholder:text-ink-3 focus:border-line-strong focus:outline-none disabled:cursor-not-allowed disabled:bg-surface-2"
+          />
+        </label>
+
+        <label class="flex flex-col gap-1 text-[11px] text-ink-3">
+          总市值上限（亿）
+          <input
+            v-model="maxMarketCap"
+            type="number"
+            step="100"
             :disabled="loading || restoring"
             class="h-9 w-24 rounded-md border border-line bg-canvas px-2.5 text-xs text-ink placeholder:text-ink-3 focus:border-line-strong focus:outline-none disabled:cursor-not-allowed disabled:bg-surface-2"
           />
@@ -161,7 +220,7 @@ function runSelection(): void {
     >
       <div class="text-sm font-medium text-ink">AI 主力追踪</div>
       <p class="mx-auto mt-1 max-w-xl text-xs leading-relaxed text-ink-3">
-        系统先从主力资金净流入靠前的标的中圈定候选，再由资金流向、行业板块、财务基本面三位分析师整体分析，最后交给资深研究员精选，只呈现 AI 认可的标的。
+        系统按所选区间的主力资金净流入排行、结合市值与区间涨幅圈定前 100 只候选，再由资金流向、行业板块、财务基本面三位分析师整体分析，最后交给资深研究员精选，只呈现 AI 认可的标的。
       </p>
     </div>
 

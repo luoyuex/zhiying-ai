@@ -3,11 +3,1416 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <meta name="description" content="智盈 AI —— A 股 AI 分析工作台" />
-    <title>智盈 AI · A 股 AI 分析工作台</title>
+    <title>智盈 AI｜A 股 AI 分析工作台 · 六位分析师与首席决策</title>
+    <meta
+      name="description"
+      content="智盈 AI 是面向 A 股的 AI 分析工作台：六位分析师并行拆解技术面、基本面、资金面、风险、情绪与新闻，首席策略官汇总为评级、三档价位与风险提示。报告可回看、对比与导出。"
+    />
+    <meta
+      name="keywords"
+      content="A股分析,AI分析工作台,AI选股,个股分析,股票研究报告,六位分析师,投资组合诊断,智盈AI"
+    />
+    <meta name="robots" content="index,follow,max-image-preview:large,max-snippet:-1" />
+    <meta name="author" content="智盈 AI" />
+    <meta name="theme-color" content="#ffffff" />
+    <meta name="color-scheme" content="light" />
+    <link rel="canonical" href="/" />
+    <link rel="alternate" hreflang="zh-CN" href="/" />
+    <link rel="icon" href="/favicon.ico" sizes="any" />
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+    <!-- 上线前把 canonical、og:image 与 twitter:image 换成正式域名的绝对地址 -->
+
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="智盈 AI" />
+    <meta property="og:locale" content="zh_CN" />
+    <meta property="og:title" content="智盈 AI｜A 股 AI 分析工作台" />
+    <meta
+      property="og:description"
+      content="六位分析师并行拆解一只 A 股，首席策略官给出评级、三档价位与风险提示。数字有出处，价位由代码计算。"
+    />
+    <meta property="og:image" content="/og-cover.png" />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:image:alt" content="智盈 AI · A 股 AI 分析工作台" />
+    <meta property="og:updated_time" content="2026-10-23T10:00:00+08:00" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="智盈 AI｜A 股 AI 分析工作台" />
+    <meta
+      name="twitter:description"
+      content="六位分析师并行拆解一只 A 股，首席策略官给出评级、三档价位与风险提示。"
+    />
+    <meta name="twitter:image" content="/og-cover.png" />
+
+    <script>
+      document.documentElement.classList.add('js')
+    </script>
+
+    <link rel="stylesheet" href="/src/styles/marketing.css" />
+    <noscript>
+      <style>
+        [data-reveal] {
+          opacity: 1 !important;
+          transform: none !important;
+        }
+      </style>
+    </noscript>
+    <script
+      type="module"
+      src="/src/marketing/main.ts"
+      onerror="document.documentElement.classList.remove('js')"
+    ></script>
+
+    <script type="application/ld+json">
+      {
+        "@context": "https://schema.org",
+        "@graph": [
+          {
+            "@type": "Organization",
+            "@id": "#organization",
+            "name": "智盈 AI",
+            "alternateName": ["Zhiying AI", "智盈"],
+            "description": "面向中国 A 股的 AI 分析工作台，提供六位分析师协作、首席策略官决策、AI 选股、组合诊断与报告归档。",
+            "slogan": "不猜涨跌，先把一只股票看透。",
+            "knowsAbout": [
+              "A 股",
+              "股票分析",
+              "技术分析",
+              "基本面分析",
+              "资金流分析",
+              "市场情绪",
+              "投资组合诊断"
+            ]
+          },
+          {
+            "@type": "WebSite",
+            "@id": "#website",
+            "name": "智盈 AI",
+            "alternateName": "Zhiying AI",
+            "inLanguage": "zh-CN",
+            "publisher": { "@id": "#organization" }
+          },
+          {
+            "@type": "WebPage",
+            "@id": "#webpage",
+            "name": "智盈 AI｜A 股 AI 分析工作台",
+            "description": "智盈 AI 是面向 A 股的 AI 分析工作台：六位分析师并行拆解技术面、基本面、资金面、风险、情绪与新闻，首席策略官汇总为评级、三档价位与风险提示。",
+            "inLanguage": "zh-CN",
+            "isPartOf": { "@id": "#website" },
+            "about": { "@id": "#software" },
+            "dateModified": "2026-10-23",
+            "author": { "@id": "#organization" }
+          },
+          {
+            "@type": "SoftwareApplication",
+            "@id": "#software",
+            "name": "智盈 AI",
+            "applicationCategory": "FinanceApplication",
+            "operatingSystem": "Web",
+            "inLanguage": "zh-CN",
+            "description": "面向中国 A 股的 AI 分析工作台。六位分析师分别研究技术面、基本面、资金面、风险、市场情绪与新闻舆情，首席策略官汇总为评级、操作建议、三档价位与风险提示。",
+            "featureList": [
+              "六位分析师并行研究",
+              "首席策略官综合决策",
+              "三档价位由代码计算",
+              "AI 选股与五条策略",
+              "自选股批量分析与组合诊断",
+              "报告归档、对比与 PDF 导出",
+              "定时选股与定时分析"
+            ],
+            "publisher": { "@id": "#organization" }
+          },
+          {
+            "@type": "HowTo",
+            "@id": "#howto",
+            "name": "用智盈 AI 完成一次个股研究",
+            "description": "从输入股票代码到拿到评级、三档价位与风险提示的完整流程。",
+            "totalTime": "PT3M",
+            "step": [
+              {
+                "@type": "HowToStep",
+                "position": 1,
+                "name": "输入标的",
+                "text": "在工作台输入 6 位股票代码、名称或拼音，覆盖沪深京 A 股约 5,900 只标的。"
+              },
+              {
+                "@type": "HowToStep",
+                "position": 2,
+                "name": "六位分析师并行研究",
+                "text": "技术面、基本面、资金面、风险管理、市场情绪与新闻舆情六位分析师各自取证，不共享结论。"
+              },
+              {
+                "@type": "HowToStep",
+                "position": 3,
+                "name": "团队讨论",
+                "text": "六份独立结论进入同一场讨论，冲突与分歧原样保留在报告中。"
+              },
+              {
+                "@type": "HowToStep",
+                "position": 4,
+                "name": "首席决策",
+                "text": "首席策略官输出评级、操作建议、持有周期、仓位上限与风险提示；三档价位由代码基于 K 线与波动率计算。"
+              }
+            ]
+          },
+          {
+            "@type": "ItemList",
+            "@id": "#analysts-list",
+            "name": "智盈 AI 的六位分析师",
+            "numberOfItems": 6,
+            "itemListElement": [
+              { "@type": "ListItem", "position": 1, "name": "技术面分析师" },
+              { "@type": "ListItem", "position": 2, "name": "基本面分析师" },
+              { "@type": "ListItem", "position": 3, "name": "资金面分析师" },
+              { "@type": "ListItem", "position": 4, "name": "风险管理分析师" },
+              { "@type": "ListItem", "position": 5, "name": "市场情绪分析师" },
+              { "@type": "ListItem", "position": 6, "name": "新闻舆情分析师" }
+            ]
+          },
+          {
+            "@type": "FAQPage",
+            "@id": "#faq",
+            "mainEntity": [
+              {
+                "@type": "Question",
+                "name": "智盈 AI 和普通行情软件有什么区别？",
+                "acceptedAnswer": {
+                  "@type": "Answer",
+                  "text": "普通行情软件主要提供指标、数据与股票名单；智盈 AI 展示的是完整研究过程：六位分析师各自取证、团队讨论保留分歧、首席策略官给出决策，结论附带来源、时间戳与数据缺口。报告支持回看、同股对比与 PDF 导出，而不只是一个当下的数字。"
+                }
+              },
+              {
+                "@type": "Question",
+                "name": "六位分析师分别看什么？",
+                "acceptedAnswer": {
+                  "@type": "Answer",
+                  "text": "技术面看趋势、均线与量价；基本面看最近 6 期财务与估值质量；资金面看近 30 日主力资金、超大单与换手；风险管理看波动率、支撑压力与事件风险；市场情绪看 ARBR、换手率与指数环境；新闻舆情看公告、新闻与可选的公开网页信息。"
+                }
+              },
+              {
+                "@type": "Question",
+                "name": "三档价位是 AI 猜的吗？",
+                "acceptedAnswer": {
+                  "@type": "Answer",
+                  "text": "不是。三档价位由代码基于 K 线、波动率与支撑压力计算，AI 不参与数值生成。报告中会展示计算依据与风险边界，避免关键数字依赖语言模型的临场发挥。"
+                }
+              },
+              {
+                "@type": "Question",
+                "name": "数据来自哪里，行情是实时的吗？",
+                "acceptedAnswer": {
+                  "@type": "Answer",
+                  "text": "行情、K 线与财务数据来自腾讯、新浪、东方财富等公开数据源，使用时会记录来源与抓取时间；部分行情可能延迟，页面会明确标注。财务指标取东方财富 F10 最近 6 期，资金流取近 30 日数据。公开资讯通过腾讯元宝搜索补充，且属于可选能力。"
+                }
+              },
+              {
+                "@type": "Question",
+                "name": "选股策略是怎么工作的？",
+                "acceptedAnswer": {
+                  "@type": "Answer",
+                  "text": "五条策略分别是主力追踪、低价寻宝、小盘精选、业绩高增与价值洼地。规则先把候选池缩到值得研究的范围，再由三位分析师与一位资深研究员独立评审，保留入选理由、反方证据与风险边界。候选与分析结果会落库，可随时回看，也支持按自定义时间定时运行。"
+                }
+              },
+              {
+                "@type": "Question",
+                "name": "AI 分析失败会怎样？",
+                "acceptedAnswer": {
+                  "@type": "Answer",
+                  "text": "模型不可用或某一步异常时，会自动切换到规则版，并在报告中明确标注。分析任务在后台执行，失败原因可见；同一条研究流程不会因为某一位分析师掉线就悄悄消失。"
+                }
+              },
+              {
+                "@type": "Question",
+                "name": "输出可以直接当作投资建议吗？",
+                "acceptedAnswer": {
+                  "@type": "Answer",
+                  "text": "不可以。智盈 AI 的所有输出仅用于技术研究与学习参考，不构成任何投资建议。产品不接入交易、不做收益承诺。股市有风险，投资需谨慎。"
+                }
+              }
+            ]
+          }
+        ]
+      }
+    </script>
   </head>
+
   <body>
-    <div id="app"></div>
-    <script type="module" src="/src/main.ts"></script>
+    <a class="skip-link" href="#main">跳到主要内容</a>
+
+    <header class="site-header" data-header>
+      <div class="shell header-inner">
+        <a class="brand" href="/" aria-label="智盈 AI 首页">
+          <img
+            class="brand-logo"
+            src="/logo-wordmark-480.png"
+            alt="智盈 AI · A 股分析工作台"
+            width="480"
+            height="165"
+          />
+        </a>
+
+        <nav class="primary-nav" aria-label="主导航">
+          <a href="#method" data-section="method">方法</a>
+          <a href="#analysts" data-section="analysts">六位分析师</a>
+          <a href="#strategies" data-section="strategies">选股策略</a>
+          <a href="#workflow" data-section="workflow">工作流</a>
+          <a href="#evidence" data-section="evidence">证据链</a>
+          <a href="#faq" data-section="faq">常见问题</a>
+        </nav>
+
+        <div class="header-actions">
+          <a class="header-login" href="/app/login">登录</a>
+          <a class="btn btn--primary btn--sm" href="/app/register">开始使用</a>
+          <button
+            class="menu-toggle"
+            type="button"
+            aria-expanded="false"
+            aria-controls="mobile-menu"
+            aria-label="打开菜单"
+            data-menu-toggle
+          >
+            <span class="menu-toggle-bars" aria-hidden="true"><i></i><i></i></span>
+          </button>
+        </div>
+      </div>
+    </header>
+
+    <div class="mobile-menu" id="mobile-menu" aria-hidden="true" inert data-menu>
+      <nav class="mobile-nav" aria-label="移动端导航">
+        <a href="#method" data-menu-link><span>01</span>方法</a>
+        <a href="#analysts" data-menu-link><span>02</span>六位分析师</a>
+        <a href="#strategies" data-menu-link><span>03</span>选股策略</a>
+        <a href="#workflow" data-menu-link><span>04</span>工作流</a>
+        <a href="#evidence" data-menu-link><span>05</span>证据链</a>
+        <a href="#faq" data-menu-link><span>06</span>常见问题</a>
+      </nav>
+      <div class="mobile-actions">
+        <a class="btn btn--primary" href="/app/register">开始使用</a>
+        <a class="btn btn--ghost" href="/app/login">登录工作台</a>
+      </div>
+      <p class="mobile-note">研究参考，不构成投资建议。</p>
+    </div>
+
+    <main id="main">
+      <section class="hero" aria-labelledby="hero-title">
+        <div class="shell hero-grid">
+          <div class="hero-copy">
+            <p class="kicker" data-reveal>A 股 AI 分析工作台</p>
+
+            <h1 id="hero-title" data-reveal style="--delay: 40ms">
+              不猜涨跌。<br />
+              <span class="hero-dim">先把一只 A 股<em>看透</em>。</span>
+            </h1>
+
+            <p class="hero-lead" data-reveal style="--delay: 80ms">
+              六位分析师并行拆解技术面、基本面、资金面、风险、情绪与公开资讯；首席策略官交叉复核，输出评级、三档价位与风险边界。
+            </p>
+
+            <div class="hero-actions" data-reveal style="--delay: 120ms">
+              <a class="btn btn--primary" href="/app/register">
+                开始一次完整分析
+                <span class="btn-arrow" aria-hidden="true">→</span>
+              </a>
+              <a class="btn btn--ghost" href="#analysts">看报告长什么样</a>
+            </div>
+
+            <ul class="hero-facts" data-reveal style="--delay: 160ms">
+              <li>邮箱注册</li>
+              <li>浏览器直接使用</li>
+              <li>无需安装</li>
+            </ul>
+          </div>
+
+          <figure class="report" data-reveal style="--delay: 100ms" aria-labelledby="report-caption">
+            <div class="report-bar">
+              <span class="report-bar-title">个股研究 / RESEARCH</span>
+              <span class="report-bar-tag">界面示意</span>
+            </div>
+
+            <div class="report-head">
+              <div>
+                <p class="report-code">600519 · 沪市主板</p>
+                <p class="report-name">贵州茅台</p>
+                <p class="report-meta">食品饮料 · 沪深 300 · 大盘价值</p>
+              </div>
+              <div class="report-quote">
+                <p class="report-price">1,478.20</p>
+                <p class="report-change"><span class="up">+12.60</span><span class="up">+0.86%</span></p>
+                <p class="report-time">10:38 · 演示数据</p>
+              </div>
+            </div>
+
+            <div class="report-chart">
+              <div class="chart-head">
+                <span>日 K · 前复权 · 近 32 个交易日</span>
+                <span class="chart-legend"><i aria-hidden="true"></i>MA20</span>
+              </div>
+              <svg
+                class="chart"
+                viewBox="0 0 560 190"
+                role="img"
+                aria-label="贵州茅台日 K 线示意图：32 根蜡烛与成交量，收盘 1478.20，非实时行情"
+              >
+                <g class="chart-grid" aria-hidden="true">
+                  <line x1="0" y1="12" x2="548" y2="12" />
+                  <line x1="0" y1="58" x2="548" y2="58" />
+                  <line x1="0" y1="104" x2="548" y2="104" />
+                  <line x1="0" y1="150" x2="548" y2="150" />
+                  <text x="546" y="16">1491</text>
+                  <text x="546" y="62">1445</text>
+                  <text x="546" y="108">1398</text>
+                  <text x="546" y="154">1352</text>
+                </g>
+
+                <path
+                  class="chart-ma"
+                  d="M14 124 C60 118 100 108 140 100 S200 86 250 78 S320 62 380 50 S480 36 541 32"
+                />
+
+                <g class="chart-candles" aria-hidden="true">
+                  <line class="k-up" x1="14" y1="120.0" x2="14" y2="138.5" />
+                  <rect class="k-up" x="10" y="126.4" width="8" height="10.2" />
+                  <line class="k-up" x1="31" y1="116.2" x2="31" y2="128.0" />
+                  <rect class="k-up" x="27" y="117.5" width="8" height="8.9" />
+                  <line class="k-up" x1="48" y1="109.7" x2="48" y2="121.9" />
+                  <rect class="k-up" x="44" y="113.0" width="8" height="4.5" />
+                  <line class="k-up" x1="65" y1="101.3" x2="65" y2="116.4" />
+                  <rect class="k-up" x="61" y="105.3" width="8" height="7.7" />
+                  <line class="k-down" x1="82" y1="101.8" x2="82" y2="110.4" />
+                  <rect class="k-down" x="78" y="105.3" width="8" height="1.6" />
+                  <line class="k-up" x1="99" y1="105.1" x2="99" y2="108.3" />
+                  <rect class="k-up" x="95" y="105.1" width="8" height="1.8" />
+                  <line class="k-up" x1="116" y1="95.8" x2="116" y2="111.4" />
+                  <rect class="k-up" x="112" y="101.3" width="8" height="3.8" />
+                  <line class="k-up" x1="133" y1="88.4" x2="133" y2="104.7" />
+                  <rect class="k-up" x="129" y="93.0" width="8" height="8.3" />
+                  <line class="k-up" x1="150" y1="88.9" x2="150" y2="96.8" />
+                  <rect class="k-up" x="146" y="92.9" width="8" height="1.5" />
+                  <line class="k-down" x1="167" y1="88.6" x2="167" y2="95.3" />
+                  <rect class="k-down" x="163" y="92.9" width="8" height="1.5" />
+                  <line class="k-up" x1="184" y1="85.2" x2="184" y2="95.8" />
+                  <rect class="k-up" x="180" y="88.9" width="8" height="5.0" />
+                  <line class="k-up" x1="201" y1="78.5" x2="201" y2="94.4" />
+                  <rect class="k-up" x="197" y="82.5" width="8" height="6.3" />
+                  <line class="k-down" x1="218" y1="78.1" x2="218" y2="88.5" />
+                  <rect class="k-down" x="214" y="82.5" width="8" height="1.9" />
+                  <line class="k-up" x1="235" y1="70.6" x2="235" y2="87.2" />
+                  <rect class="k-up" x="231" y="76.8" width="8" height="7.6" />
+                  <line class="k-down" x1="252" y1="72.0" x2="252" y2="79.7" />
+                  <rect class="k-down" x="248" y="76.8" width="8" height="2.4" />
+                  <line class="k-up" x1="269" y1="68.6" x2="269" y2="83.8" />
+                  <rect class="k-up" x="265" y="71.5" width="8" height="7.7" />
+                  <line class="k-up" x1="286" y1="58.5" x2="286" y2="73.1" />
+                  <rect class="k-up" x="282" y="61.6" width="8" height="10.0" />
+                  <line class="k-up" x1="303" y1="53.8" x2="303" y2="65.0" />
+                  <rect class="k-up" x="299" y="55.6" width="8" height="6.0" />
+                  <line class="k-up" x1="320" y1="47.6" x2="320" y2="56.2" />
+                  <rect class="k-up" x="316" y="52.8" width="8" height="2.7" />
+                  <line class="k-up" x1="337" y1="47.7" x2="337" y2="54.0" />
+                  <rect class="k-up" x="333" y="48.9" width="8" height="3.9" />
+                  <line class="k-up" x1="354" y1="36.7" x2="354" y2="51.5" />
+                  <rect class="k-up" x="350" y="41.9" width="8" height="7.0" />
+                  <line class="k-up" x1="371" y1="37.4" x2="371" y2="47.8" />
+                  <rect class="k-up" x="367" y="39.9" width="8" height="2.0" />
+                  <line class="k-up" x1="388" y1="31.8" x2="388" y2="44.1" />
+                  <rect class="k-up" x="384" y="37.2" width="8" height="2.7" />
+                  <line class="k-down" x1="405" y1="34.5" x2="405" y2="42.9" />
+                  <rect class="k-down" x="401" y="37.2" width="8" height="1.5" />
+                  <line class="k-down" x1="422" y1="35.0" x2="422" y2="43.0" />
+                  <rect class="k-down" x="418" y="37.6" width="8" height="1.8" />
+                  <line class="k-up" x1="439" y1="27.1" x2="439" y2="45.7" />
+                  <rect class="k-up" x="435" y="33.3" width="8" height="6.1" />
+                  <line class="k-down" x1="456" y1="32.5" x2="456" y2="36.0" />
+                  <rect class="k-down" x="452" y="33.3" width="8" height="1.5" />
+                  <line class="k-up" x1="473" y1="31.9" x2="473" y2="39.2" />
+                  <rect class="k-up" x="469" y="33.4" width="8" height="1.5" />
+                  <line class="k-down" x1="490" y1="30.1" x2="490" y2="41.9" />
+                  <rect class="k-down" x="486" y="33.4" width="8" height="4.0" />
+                  <line class="k-down" x1="507" y1="32.7" x2="507" y2="38.7" />
+                  <rect class="k-down" x="503" y="37.3" width="8" height="1.5" />
+                  <line class="k-up" x1="524" y1="26.1" x2="524" y2="40.2" />
+                  <rect class="k-up" x="520" y="31.4" width="8" height="6.8" />
+                  <line class="k-up" x1="541" y1="23.5" x2="541" y2="32.3" />
+                  <rect class="k-up" x="537" y="25.1" width="8" height="6.3" />
+                </g>
+
+                <line class="chart-last" x1="0" y1="25.1" x2="548" y2="25.1" />
+
+                <g class="chart-volume" aria-hidden="true">
+                  <rect class="k-up" x="10" y="152.4" width="8" height="29.6" />
+                  <rect class="k-up" x="27" y="155.6" width="8" height="26.4" />
+                  <rect class="k-up" x="44" y="159.7" width="8" height="22.3" />
+                  <rect class="k-up" x="61" y="164.7" width="8" height="17.3" />
+                  <rect class="k-down" x="78" y="155.7" width="8" height="26.3" />
+                  <rect class="k-up" x="95" y="150.2" width="8" height="31.8" />
+                  <rect class="k-up" x="112" y="166.2" width="8" height="15.8" />
+                  <rect class="k-up" x="129" y="159.1" width="8" height="22.9" />
+                  <rect class="k-up" x="146" y="157.4" width="8" height="24.6" />
+                  <rect class="k-down" x="163" y="159.7" width="8" height="22.3" />
+                  <rect class="k-up" x="180" y="165.5" width="8" height="16.5" />
+                  <rect class="k-up" x="197" y="156.9" width="8" height="25.1" />
+                  <rect class="k-down" x="214" y="165.8" width="8" height="16.2" />
+                  <rect class="k-up" x="231" y="152.2" width="8" height="29.8" />
+                  <rect class="k-down" x="248" y="159.4" width="8" height="22.6" />
+                  <rect class="k-up" x="265" y="156.3" width="8" height="25.7" />
+                  <rect class="k-up" x="282" y="163.8" width="8" height="18.2" />
+                  <rect class="k-up" x="299" y="153.7" width="8" height="28.3" />
+                  <rect class="k-up" x="316" y="151.5" width="8" height="30.5" />
+                  <rect class="k-up" x="333" y="167.0" width="8" height="15.0" />
+                  <rect class="k-up" x="350" y="154.3" width="8" height="27.7" />
+                  <rect class="k-up" x="367" y="155.5" width="8" height="26.5" />
+                  <rect class="k-up" x="384" y="160.6" width="8" height="21.4" />
+                  <rect class="k-down" x="401" y="165.1" width="8" height="16.9" />
+                  <rect class="k-down" x="418" y="152.2" width="8" height="29.8" />
+                  <rect class="k-up" x="435" y="162.2" width="8" height="19.8" />
+                  <rect class="k-down" x="452" y="168.1" width="8" height="13.9" />
+                  <rect class="k-up" x="469" y="152.2" width="8" height="29.8" />
+                  <rect class="k-down" x="486" y="166.3" width="8" height="15.7" />
+                  <rect class="k-down" x="503" y="160.5" width="8" height="21.5" />
+                  <rect class="k-up" x="520" y="162.9" width="8" height="19.1" />
+                  <rect class="k-up" x="537" y="166.3" width="8" height="15.7" />
+                </g>
+
+                <g class="chart-axis" aria-hidden="true">
+                  <text x="8" y="188">09/24</text>
+                  <text x="252" y="188">10/08</text>
+                  <text x="518" y="188">10/23</text>
+                </g>
+              </svg>
+            </div>
+
+            <div class="report-tabs" role="tablist" aria-label="六位分析师的独立结论">
+              <button
+                class="tab is-active"
+                type="button"
+                role="tab"
+                id="tab-technical"
+                aria-selected="true"
+                aria-controls="panel-technical"
+                data-tab
+              >
+                <span class="tab-name">技术面</span>
+                <span class="tab-track" aria-hidden="true"><i style="--v: 78%"></i></span>
+                <span class="tab-score">78</span>
+              </button>
+              <button
+                class="tab"
+                type="button"
+                role="tab"
+                id="tab-fundamental"
+                aria-selected="false"
+                aria-controls="panel-fundamental"
+                tabindex="-1"
+                data-tab
+              >
+                <span class="tab-name">基本面</span>
+                <span class="tab-track" aria-hidden="true"><i style="--v: 72%"></i></span>
+                <span class="tab-score">72</span>
+              </button>
+              <button
+                class="tab"
+                type="button"
+                role="tab"
+                id="tab-capital"
+                aria-selected="false"
+                aria-controls="panel-capital"
+                tabindex="-1"
+                data-tab
+              >
+                <span class="tab-name">资金面</span>
+                <span class="tab-track" aria-hidden="true"><i style="--v: 64%"></i></span>
+                <span class="tab-score">64</span>
+              </button>
+              <button
+                class="tab"
+                type="button"
+                role="tab"
+                id="tab-risk"
+                aria-selected="false"
+                aria-controls="panel-risk"
+                tabindex="-1"
+                data-tab
+              >
+                <span class="tab-name">风险</span>
+                <span class="tab-track" aria-hidden="true"><i style="--v: 58%"></i></span>
+                <span class="tab-score">58</span>
+              </button>
+              <button
+                class="tab"
+                type="button"
+                role="tab"
+                id="tab-sentiment"
+                aria-selected="false"
+                aria-controls="panel-sentiment"
+                tabindex="-1"
+                data-tab
+              >
+                <span class="tab-name">情绪</span>
+                <span class="tab-track" aria-hidden="true"><i style="--v: 70%"></i></span>
+                <span class="tab-score">70</span>
+              </button>
+              <button
+                class="tab"
+                type="button"
+                role="tab"
+                id="tab-news"
+                aria-selected="false"
+                aria-controls="panel-news"
+                tabindex="-1"
+                data-tab
+              >
+                <span class="tab-name">新闻</span>
+                <span class="tab-track" aria-hidden="true"><i style="--v: 66%"></i></span>
+                <span class="tab-score">66</span>
+              </button>
+            </div>
+
+            <div class="report-panels">
+              <div
+                class="panel is-active"
+                role="tabpanel"
+                id="panel-technical"
+                aria-labelledby="tab-technical"
+                tabindex="0"
+              >
+                <p><span class="panel-tag">01 / 技术面</span>MA20 上方运行，MACD 金叉延续；量能没有同步放大，趋势仍需确认。</p>
+              </div>
+              <div
+                class="panel"
+                role="tabpanel"
+                id="panel-fundamental"
+                aria-labelledby="tab-fundamental"
+                tabindex="0"
+                hidden
+              >
+                <p><span class="panel-tag">02 / 基本面</span>最近 6 期营收与净利保持增长，毛利率稳定；当前估值处于历史中位区间。</p>
+              </div>
+              <div
+                class="panel"
+                role="tabpanel"
+                id="panel-capital"
+                aria-labelledby="tab-capital"
+                tabindex="0"
+                hidden
+              >
+                <p><span class="panel-tag">03 / 资金面</span>近 5 日主力资金净流入，但超大单与散户方向背离，追高性价比一般。</p>
+              </div>
+              <div
+                class="panel"
+                role="tabpanel"
+                id="panel-risk"
+                aria-labelledby="tab-risk"
+                tabindex="0"
+                hidden
+              >
+                <p><span class="panel-tag">04 / 风险</span>短期波动率抬升，距离防守位约 4%；若跌破关键支撑，评级需要重算。</p>
+              </div>
+              <div
+                class="panel"
+                role="tabpanel"
+                id="panel-sentiment"
+                aria-labelledby="tab-sentiment"
+                tabindex="0"
+                hidden
+              >
+                <p><span class="panel-tag">05 / 情绪</span>换手率温和，ARBR 未进入极端区；指数环境偏中性，情绪不构成加分项。</p>
+              </div>
+              <div
+                class="panel"
+                role="tabpanel"
+                id="panel-news"
+                aria-labelledby="tab-news"
+                tabindex="0"
+                hidden
+              >
+                <p><span class="panel-tag">06 / 新闻</span>近 30 天公告以经营类为主，未见重大负面事件；公开资讯仅作背景参考。</p>
+              </div>
+            </div>
+
+            <div class="report-verdict">
+              <div class="verdict-main">
+                <span>首席决策</span>
+                <strong>持有</strong>
+              </div>
+              <div>
+                <span>综合评分</span>
+                <strong>72<small>/100</small></strong>
+              </div>
+              <div>
+                <span>置信度</span>
+                <strong>中高</strong>
+              </div>
+            </div>
+
+            <div class="report-levels">
+              <div><span>防守</span><strong>1,420</strong></div>
+              <div><span>均衡</span><strong>1,510</strong></div>
+              <div><span>进取</span><strong>1,580</strong></div>
+              <p>三档价位由代码计算</p>
+            </div>
+
+            <figcaption id="report-caption">
+              界面示意 · 非实时行情 · 不构成投资建议
+            </figcaption>
+          </figure>
+        </div>
+      </section>
+
+      <section class="facts" aria-labelledby="facts-title">
+        <div class="shell">
+          <h2 class="sr-only" id="facts-title">智盈 AI 产品概览</h2>
+          <dl class="facts-grid">
+            <div data-reveal>
+              <dt>覆盖标的</dt>
+              <dd>5,900<span>+</span></dd>
+              <p>沪深京 A 股，支持代码、名称与拼音搜索</p>
+            </div>
+            <div data-reveal style="--delay: 50ms">
+              <dt>研究角色</dt>
+              <dd>6<span>位</span></dd>
+              <p>技术、基本面、资金、风险、情绪、新闻</p>
+            </div>
+            <div data-reveal style="--delay: 100ms">
+              <dt>选股路线</dt>
+              <dd>5<span>条</span></dd>
+              <p>规则圈候选，AI 评审，结果落库</p>
+            </div>
+            <div data-reveal style="--delay: 150ms">
+              <dt>行情来源</dt>
+              <dd>3<span>家</span></dd>
+              <p>腾讯、新浪、东方财富，多源自动降级</p>
+            </div>
+          </dl>
+        </div>
+      </section>
+
+      <section class="section" id="method" aria-labelledby="method-title">
+        <div class="shell section-grid">
+          <div class="section-label">
+            <span class="section-num">01</span>
+            <span class="section-name">方法</span>
+          </div>
+
+          <div class="section-body">
+            <h2 id="method-title" data-reveal>不是把指标堆给你，<br />而是让观点互相打架。</h2>
+            <p class="lede" data-reveal>
+              单点指标只会制造确定感。智盈 AI 把研究拆成六个独立视角，各自取证、各自下判断，再放进同一场讨论里交叉质询。最后一步不交给模型算术：价位、仓位上限与风险边界，由代码根据真实数据计算。
+            </p>
+
+            <div class="principles" data-reveal>
+              <article class="principle">
+                <span class="micro">01 / INDEPENDENT</span>
+                <h3>各自取证</h3>
+                <p>六位分析师只拿到自己维度的数据，不共享结论，避免先入为主。</p>
+              </article>
+              <article class="principle">
+                <span class="micro">02 / CROSS-EXAM</span>
+                <h3>交叉讨论</h3>
+                <p>观点被放在同一张桌上复核，冲突与分歧会原样保留在报告里。</p>
+              </article>
+              <article class="principle">
+                <span class="micro">03 / HARD RULES</span>
+                <h3>代码兜底</h3>
+                <p>三档价位始终由代码计算；模型不可用时切换规则版，并明确标注。</p>
+              </article>
+            </div>
+
+            <aside class="callout" data-reveal>
+              <p class="callout-quote">AI 负责判断，<br />代码负责算术。</p>
+              <div class="callout-body">
+                <p>
+                  估值、趋势、资金流都可以被讨论，但关键价位不能靠语言生成。报告中的入场、防守与进取位来自统一的技术计算，谁来看、什么时候看，结果都可复现。
+                </p>
+                <ul class="hair-list">
+                  <li>三档价位由代码计算，不交给模型猜</li>
+                  <li>每条结论标注数据来源与抓取时间</li>
+                  <li>缺失维度不补故事，标注缺口并降低置信度</li>
+                </ul>
+              </div>
+            </aside>
+          </div>
+        </div>
+      </section>
+
+      <section class="section" id="analysts" aria-labelledby="analysts-title">
+        <div class="shell section-grid">
+          <div class="section-label">
+            <span class="section-num">02</span>
+            <span class="section-name">六位分析师</span>
+          </div>
+
+          <div class="section-body">
+            <h2 id="analysts-title" data-reveal>六张研究桌，<br />各看一面。</h2>
+            <p class="lede" data-reveal>
+              六个角色拿到各自维度的数据，独立出结论；没有共享答案，也没有统一口径的漂亮话。他们会在讨论里互相拆台，最后才轮到首席策略官落笔。
+            </p>
+
+            <ul class="roster">
+              <li class="roster-row" data-reveal>
+                <div class="roster-id">
+                  <span class="roster-num">01</span>
+                  <h3>技术面</h3>
+                  <span class="roster-en">TECHNICAL</span>
+                </div>
+                <dl class="roster-spec">
+                  <div>
+                    <dt>数据输入</dt>
+                    <dd>90 根日 K · 均线 · MACD · RSI · BOLL · ATR · 量比</dd>
+                  </div>
+                  <div>
+                    <dt>追问</dt>
+                    <dd>趋势还在不在？哪里是错的边界？</dd>
+                  </div>
+                  <div>
+                    <dt>输出</dt>
+                    <dd>趋势 / 位置 / 信号</dd>
+                  </div>
+                </dl>
+              </li>
+
+              <li class="roster-row" data-reveal>
+                <div class="roster-id">
+                  <span class="roster-num">02</span>
+                  <h3>基本面</h3>
+                  <span class="roster-en">FUNDAMENTAL</span>
+                </div>
+                <dl class="roster-spec">
+                  <div>
+                    <dt>数据输入</dt>
+                    <dd>东方财富 F10 · 最近 6 期财务 · 估值与盈利质量</dd>
+                  </div>
+                  <div>
+                    <dt>追问</dt>
+                    <dd>生意是否在变好，价格是否合理？</dd>
+                  </div>
+                  <div>
+                    <dt>输出</dt>
+                    <dd>盈利 / 估值 / 质量</dd>
+                  </div>
+                </dl>
+              </li>
+
+              <li class="roster-row" data-reveal>
+                <div class="roster-id">
+                  <span class="roster-num">03</span>
+                  <h3>资金面</h3>
+                  <span class="roster-en">CAPITAL FLOW</span>
+                </div>
+                <dl class="roster-spec">
+                  <div>
+                    <dt>数据输入</dt>
+                    <dd>近 30 日主力资金 · 超大单 · 换手率 · 量价关系</dd>
+                  </div>
+                  <div>
+                    <dt>追问</dt>
+                    <dd>谁在买，谁在撤，量价是否同向？</dd>
+                  </div>
+                  <div>
+                    <dt>输出</dt>
+                    <dd>流入 / 背离 / 强度</dd>
+                  </div>
+                </dl>
+              </li>
+
+              <li class="roster-row" data-reveal>
+                <div class="roster-id">
+                  <span class="roster-num">04</span>
+                  <h3>风险管理</h3>
+                  <span class="roster-en">RISK</span>
+                </div>
+                <dl class="roster-spec">
+                  <div>
+                    <dt>数据输入</dt>
+                    <dd>波动率 · 支撑压力 · 回撤空间 · 事件风险</dd>
+                  </div>
+                  <div>
+                    <dt>追问</dt>
+                    <dd>最坏会坏到哪里，仓位该留多少余地？</dd>
+                  </div>
+                  <div>
+                    <dt>输出</dt>
+                    <dd>边界 / 仓位 / 预警</dd>
+                  </div>
+                </dl>
+              </li>
+
+              <li class="roster-row" data-reveal>
+                <div class="roster-id">
+                  <span class="roster-num">05</span>
+                  <h3>市场情绪</h3>
+                  <span class="roster-en">SENTIMENT</span>
+                </div>
+                <dl class="roster-spec">
+                  <div>
+                    <dt>数据输入</dt>
+                    <dd>ARBR · 换手率 · 指数环境 · 市场温度</dd>
+                  </div>
+                  <div>
+                    <dt>追问</dt>
+                    <dd>现在是过热、偏冷，还是不值得下注？</dd>
+                  </div>
+                  <div>
+                    <dt>输出</dt>
+                    <dd>温度 / 拥挤 / 环境</dd>
+                  </div>
+                </dl>
+              </li>
+
+              <li class="roster-row" data-reveal>
+                <div class="roster-id">
+                  <span class="roster-num">06</span>
+                  <h3>新闻舆情</h3>
+                  <span class="roster-en">NEWS &amp; PUBLIC INFO</span>
+                </div>
+                <dl class="roster-spec">
+                  <div>
+                    <dt>数据输入</dt>
+                    <dd>公司公告 · 新闻列表 · 公开网页检索（可选）</dd>
+                  </div>
+                  <div>
+                    <dt>追问</dt>
+                    <dd>有没有被忽略的事，会不会改变结论？</dd>
+                  </div>
+                  <div>
+                    <dt>输出</dt>
+                    <dd>事件 / 来源 / 影响</dd>
+                  </div>
+                </dl>
+              </li>
+            </ul>
+
+            <div class="log" data-reveal>
+              <div class="log-head">
+                <h3>团队讨论 · 示例记录</h3>
+                <span>分歧会被保留</span>
+              </div>
+              <ol>
+                <li>
+                  <time datetime="09:42">09:42</time>
+                  <span class="log-who">资金面</span>
+                  <p>净流入成立，但量价背离，建议把“强势”降级为“观察”。</p>
+                </li>
+                <li>
+                  <time datetime="09:43">09:43</time>
+                  <span class="log-who">风险管理</span>
+                  <p>距离防守位只有 4.1%，仓位建议不超过四成。</p>
+                </li>
+                <li>
+                  <time datetime="09:44">09:44</time>
+                  <span class="log-who">首席策略官</span>
+                  <p>维持“持有”，下调进取位；跌破防守位则重新评估。</p>
+                </li>
+              </ol>
+              <p class="log-foot">报告记录的是研究过程，不只是一个结论。</p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="section" id="strategies" aria-labelledby="strategies-title">
+        <div class="shell section-grid">
+          <div class="section-label">
+            <span class="section-num">03</span>
+            <span class="section-name">选股策略</span>
+          </div>
+
+          <div class="section-body">
+            <h2 id="strategies-title" data-reveal>五条选股路线，<br />先把候选池缩到值得研究。</h2>
+            <p class="lede" data-reveal>
+              规则负责圈定候选，AI 负责在候选里做取舍。每条策略都经过三位分析师与一位资深研究员的独立评审，保留入选理由、反方证据与风险边界。结果落库，随时回看。
+            </p>
+
+            <div class="strategies">
+              <article class="strategy" data-reveal>
+                <header>
+                  <span class="strategy-num">01</span>
+                  <div>
+                    <h3>主力追踪 <span class="en">MOMENTUM</span></h3>
+                    <p>顺着资金与强度，找正在被持续买入的标的。</p>
+                  </div>
+                  <ul class="strategy-tags">
+                    <li>主力资金</li>
+                    <li>成交强度</li>
+                    <li>行业位置</li>
+                  </ul>
+                </header>
+                <div class="strategy-body">
+                  <div>
+                    <span class="micro">候选池</span>
+                    <p>从当日强势与成交活跃的 A 股中圈定候选，不直接给出买入名单。</p>
+                  </div>
+                  <div>
+                    <span class="micro">AI 评审</span>
+                    <p>资金面、行业与基本面三位分析师分别复核；资深研究员只保留逻辑自洽的标的。</p>
+                  </div>
+                  <div>
+                    <span class="micro">输出</span>
+                    <p>入选理由、反方证据、风险边界与下一步观察点，结果自动归档。</p>
+                  </div>
+                </div>
+              </article>
+
+              <article class="strategy" data-reveal>
+                <header>
+                  <span class="strategy-num">02</span>
+                  <div>
+                    <h3>低价寻宝 <span class="en">VALUE HUNT</span></h3>
+                    <p>在低价区间里，筛出有流动性、基本面不失真的标的。</p>
+                  </div>
+                  <ul class="strategy-tags">
+                    <li>价格区间</li>
+                    <li>流动性</li>
+                    <li>基本面</li>
+                  </ul>
+                </header>
+                <div class="strategy-body">
+                  <div>
+                    <span class="micro">候选池</span>
+                    <p>按价格与流动性规则筛选，剔除成交不足和基本面明显失真的标的。</p>
+                  </div>
+                  <div>
+                    <span class="micro">AI 评审</span>
+                    <p>资金与流动性、行业、业绩成长三位分析师交叉评审。</p>
+                  </div>
+                  <div>
+                    <span class="micro">输出</span>
+                    <p>候选档案、风险提示与观察清单，而不是一句“低价可买”。</p>
+                  </div>
+                </div>
+              </article>
+
+              <article class="strategy" data-reveal>
+                <header>
+                  <span class="strategy-num">03</span>
+                  <div>
+                    <h3>小盘精选 <span class="en">SMALL CAP</span></h3>
+                    <p>小市值不是理由，先看成长与流动性是否撑得住。</p>
+                  </div>
+                  <ul class="strategy-tags">
+                    <li>流通市值</li>
+                    <li>成长性</li>
+                    <li>流动性</li>
+                  </ul>
+                </header>
+                <div class="strategy-body">
+                  <div>
+                    <span class="micro">候选池</span>
+                    <p>按流通市值与流动性规则圈定小盘候选，不把“小”当作唯一优势。</p>
+                  </div>
+                  <div>
+                    <span class="micro">AI 评审</span>
+                    <p>成长与估值、行业、资金与流动性三位分析师复核。</p>
+                  </div>
+                  <div>
+                    <span class="micro">输出</span>
+                    <p>成长质量、流动性风险与结论置信度，逐只说明。</p>
+                  </div>
+                </div>
+              </article>
+
+              <article class="strategy" data-reveal>
+                <header>
+                  <span class="strategy-num">04</span>
+                  <div>
+                    <h3>业绩高增 <span class="en">GROWTH</span></h3>
+                    <p>从净利润同比 ≥ 10% 的线索里，继续找增长质量。</p>
+                  </div>
+                  <ul class="strategy-tags">
+                    <li>净利润同比</li>
+                    <li>成交额</li>
+                    <li>成长质量</li>
+                  </ul>
+                </header>
+                <div class="strategy-body">
+                  <div>
+                    <span class="micro">候选池</span>
+                    <p>按净利润同比与成交额规则圈定候选，避免只看增速不看质量。</p>
+                  </div>
+                  <div>
+                    <span class="micro">AI 评审</span>
+                    <p>业绩成长、成长质量、行业三位分析师交叉验证。</p>
+                  </div>
+                  <div>
+                    <span class="micro">输出</span>
+                    <p>增长来源、可持续性与风险点，以及需要继续跟踪的指标。</p>
+                  </div>
+                </div>
+              </article>
+
+              <article class="strategy" data-reveal>
+                <header>
+                  <span class="strategy-num">05</span>
+                  <div>
+                    <h3>价值洼地 <span class="en">DEEP VALUE</span></h3>
+                    <p>PE、PB、股息率与负债率放在一起看，不被单一低估值骗到。</p>
+                  </div>
+                  <ul class="strategy-tags">
+                    <li>PE</li>
+                    <li>PB</li>
+                    <li>股息率</li>
+                    <li>负债率</li>
+                  </ul>
+                </header>
+                <div class="strategy-body">
+                  <div>
+                    <span class="micro">候选池</span>
+                    <p>用估值、分红、财务与流通市值规则筛出候选，拒绝只看一个估值数字。</p>
+                  </div>
+                  <div>
+                    <span class="micro">AI 评审</span>
+                    <p>估值质量、成长与估值、行业三位分析师复核。</p>
+                  </div>
+                  <div>
+                    <span class="micro">输出</span>
+                    <p>估值坐标、分红质量与价值陷阱提示，逐条列出依据。</p>
+                  </div>
+                </div>
+              </article>
+            </div>
+
+            <p class="section-note" data-reveal>
+              策略只负责把值得研究的标的推到桌前。买不买、买多少，仍由你决定。
+            </p>
+          </div>
+        </div>
+      </section>
+
+      <section class="section" id="workflow" aria-labelledby="workflow-title">
+        <div class="shell section-grid">
+          <div class="section-label">
+            <span class="section-num">04</span>
+            <span class="section-name">工作流</span>
+          </div>
+
+          <div class="section-body">
+            <h2 id="workflow-title" data-reveal>选股、盯仓、复盘，<br />在一张桌面上完成。</h2>
+            <p class="lede" data-reveal>
+              不是一堆孤立功能：候选、分析、持仓与报告会沿着同一条链路留下来。分析在后台执行，切走页面不会中断；刷新后可以接着看。
+            </p>
+
+            <div class="work-grid" data-reveal>
+              <article class="work-cell">
+                <span class="micro">01</span>
+                <h3>定时选股</h3>
+                <p>按自定义时间自动运行策略。开盘前拿到候选，收盘后结果自动归档，不必每天手动重复同一件事。</p>
+                <ul class="tag-row">
+                  <li>定时执行</li>
+                  <li>结果落库</li>
+                </ul>
+              </article>
+              <article class="work-cell">
+                <span class="micro">02</span>
+                <h3>自选股批量分析</h3>
+                <p>一次最多 20 只，后台并行处理。刷新、切页、临时离开都能续上，不用从头再来。</p>
+                <ul class="tag-row">
+                  <li>批量</li>
+                  <li>断点恢复</li>
+                </ul>
+              </article>
+              <article class="work-cell">
+                <span class="micro">03</span>
+                <h3>组合诊断</h3>
+                <p>把成本、数量、浮动盈亏与最新结论放在一起，给出组合健康度、风险提示与逐只操作建议。</p>
+                <ul class="tag-row">
+                  <li>持仓</li>
+                  <li>组合风险</li>
+                </ul>
+              </article>
+              <article class="work-cell">
+                <span class="micro">04</span>
+                <h3>报告对比与导出</h3>
+                <p>同一只股票的多份报告并排看差异；完整报告导出 PDF，方便留档与复盘。</p>
+                <ul class="tag-row">
+                  <li>同股对比</li>
+                  <li>PDF</li>
+                </ul>
+              </article>
+            </div>
+
+            <div class="day-rail" data-reveal>
+              <div class="rail-head">
+                <h3>一个研究日</h3>
+                <span>时间可自定义</span>
+              </div>
+              <ol>
+                <li>
+                  <time datetime="08:45">08:45</time>
+                  <span>自动选股</span>
+                </li>
+                <li>
+                  <time>盘中</time>
+                  <span>个股速查</span>
+                </li>
+                <li>
+                  <time datetime="15:10">15:10</time>
+                  <span>自选股批量分析</span>
+                </li>
+                <li>
+                  <time>收盘后</time>
+                  <span>组合诊断与归档</span>
+                </li>
+              </ol>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="section" id="evidence" aria-labelledby="evidence-title">
+        <div class="shell section-grid">
+          <div class="section-label">
+            <span class="section-num">05</span>
+            <span class="section-name">证据链</span>
+          </div>
+
+          <div class="section-body">
+            <h2 id="evidence-title" data-reveal>拿不到的数据，不补故事。</h2>
+            <p class="lede" data-reveal>
+              缺少的维度会标注为数据缺口，并降低对应结论的置信度。报告里的每个数字，都能看到来源与抓取时间；行情延迟会明确标出。分析可以失败，但不能假装什么都知道。
+            </p>
+
+            <div class="evidence-grid">
+              <div class="table-wrap" data-reveal>
+                <table>
+                  <caption>
+                    智盈 AI 的主要数据来源与使用方式
+                  </caption>
+                  <thead>
+                    <tr>
+                      <th scope="col">数据层</th>
+                      <th scope="col">来源</th>
+                      <th scope="col">怎么用</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <tr>
+                      <th scope="row">行情与 K 线</th>
+                      <td>腾讯 · 新浪 · 东方财富</td>
+                      <td>多源自动降级，标注来源与抓取时间</td>
+                    </tr>
+                    <tr>
+                      <th scope="row">财务指标</th>
+                      <td>东方财富 F10</td>
+                      <td>最近 6 期，进入基本面分析</td>
+                    </tr>
+                    <tr>
+                      <th scope="row">资金流</th>
+                      <td>东方财富</td>
+                      <td>近 30 日主力资金与换手数据</td>
+                    </tr>
+                    <tr>
+                      <th scope="row">公告与新闻</th>
+                      <td>东方财富</td>
+                      <td>个股公告、新闻列表与事件线索</td>
+                    </tr>
+                    <tr>
+                      <th scope="row">公开网页</th>
+                      <td>腾讯元宝搜索</td>
+                      <td>可选补充，结果附带来源链接</td>
+                    </tr>
+                    <tr>
+                      <th scope="row">技术诊断</th>
+                      <td>代码计算</td>
+                      <td>90 根日 K 前复权，价位由规则生成</td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+
+              <aside class="trace" data-reveal>
+                <h3 class="trace-title">一条结论的骨架</h3>
+                <ol>
+                  <li>
+                    <span>01</span>
+                    <div>
+                      <h4>有来源</h4>
+                      <p>数据来自哪里、什么时候抓取，报告里写清楚。</p>
+                    </div>
+                  </li>
+                  <li>
+                    <span>02</span>
+                    <div>
+                      <h4>有缺口</h4>
+                      <p>拿不到的维度不编造，降低对应结论的置信度。</p>
+                    </div>
+                  </li>
+                  <li>
+                    <span>03</span>
+                    <div>
+                      <h4>有算术</h4>
+                      <p>三档价位由代码计算；模型异常时切换规则版并标注。</p>
+                    </div>
+                  </li>
+                </ol>
+                <p class="trace-note">报告可回看、同股对比与导出，方便把一次判断和后来的事实对上。</p>
+              </aside>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="section section--faq" id="faq" aria-labelledby="faq-title">
+        <div class="shell section-grid">
+          <div class="section-label">
+            <span class="section-num">06</span>
+            <span class="section-name">常见问题</span>
+          </div>
+
+          <div class="section-body">
+            <h2 id="faq-title" data-reveal>关于智盈 AI 的常见问题</h2>
+
+            <div class="definition" data-reveal>
+              <p class="micro">一句话认识智盈 AI</p>
+              <p class="definition-text">
+                <strong>智盈 AI</strong> 是一个面向中国 A 股的 AI 分析工作台。输入股票代码或名称，六位分析师分别研究技术面、基本面、资金面、风险、市场情绪与新闻舆情，再由首席策略官汇总为评级、操作建议、三档价位与风险提示。
+              </p>
+              <dl class="definition-facts">
+                <div><dt>覆盖市场</dt><dd>沪深京 A 股，约 5,900 只</dd></div>
+                <div><dt>核心输出</dt><dd>评级、操作建议、三档价位、风险提示</dd></div>
+                <div><dt>数据来源</dt><dd>腾讯、新浪、东方财富、元宝搜索（可选）</dd></div>
+                <div><dt>使用方式</dt><dd>浏览器直接使用，邮箱注册</dd></div>
+              </dl>
+            </div>
+
+            <div class="faq-list">
+              <article class="faq-item" data-reveal>
+                <h3>智盈 AI 和普通行情软件有什么区别？</h3>
+                <p>
+                  普通行情软件主要提供指标、数据与股票名单；智盈 AI 展示的是完整研究过程：六位分析师各自取证、团队讨论保留分歧、首席策略官给出决策，结论附带来源、时间戳与数据缺口。报告支持回看、同股对比与 PDF 导出，而不只是一个当下的数字。
+                </p>
+              </article>
+
+              <article class="faq-item" data-reveal>
+                <h3>六位分析师分别看什么？</h3>
+                <p>
+                  技术面看趋势、均线与量价；基本面看最近 6 期财务与估值质量；资金面看近 30 日主力资金、超大单与换手；风险管理看波动率、支撑压力与事件风险；市场情绪看 ARBR、换手率与指数环境；新闻舆情看公告、新闻与可选的公开网页信息。
+                </p>
+              </article>
+
+              <article class="faq-item" data-reveal>
+                <h3>三档价位是 AI 猜的吗？</h3>
+                <p>
+                  不是。三档价位由代码基于 K 线、波动率与支撑压力计算，AI 不参与数值生成。报告中会展示计算依据与风险边界，避免关键数字依赖语言模型的临场发挥。
+                </p>
+              </article>
+
+              <article class="faq-item" data-reveal>
+                <h3>数据来自哪里，行情是实时的吗？</h3>
+                <p>
+                  行情、K 线与财务数据来自腾讯、新浪、东方财富等公开数据源，使用时会记录来源与抓取时间；部分行情可能延迟，页面会明确标注。财务指标取东方财富 F10 最近 6 期，资金流取近 30 日数据。公开资讯通过腾讯元宝搜索补充，且属于可选能力。
+                </p>
+              </article>
+
+              <article class="faq-item" data-reveal>
+                <h3>选股策略是怎么工作的？</h3>
+                <p>
+                  五条策略分别是主力追踪、低价寻宝、小盘精选、业绩高增与价值洼地。规则先把候选池缩到值得研究的范围，再由三位分析师与一位资深研究员独立评审，保留入选理由、反方证据与风险边界。候选与分析结果会落库，可随时回看，也支持按自定义时间定时运行。
+                </p>
+              </article>
+
+              <article class="faq-item" data-reveal>
+                <h3>AI 分析失败会怎样？</h3>
+                <p>
+                  模型不可用或某一步异常时，会自动切换到规则版，并在报告中明确标注。分析任务在后台执行，失败原因可见；同一条研究流程不会因为某一位分析师掉线就悄悄消失。
+                </p>
+              </article>
+
+              <article class="faq-item" data-reveal>
+                <h3>输出可以直接当作投资建议吗？</h3>
+                <p>
+                  不可以。智盈 AI 的所有输出仅用于技术研究与学习参考，不构成任何投资建议。产品不接入交易、不做收益承诺。股市有风险，投资需谨慎。
+                </p>
+              </article>
+            </div>
+
+            <p class="faq-updated" data-reveal>
+              内容更新于 <time datetime="2026-10">2026 年 10 月</time>
+            </p>
+          </div>
+        </div>
+      </section>
+
+      <section class="closing" aria-labelledby="closing-title">
+        <div class="shell closing-inner">
+          <div class="closing-copy">
+            <span class="micro micro--light">07 / 开始</span>
+            <h2 id="closing-title" data-reveal>下一次出手前，<br />先把证据摆上桌。</h2>
+            <p data-reveal>
+              从一只股票开始，跑完六位分析师、团队讨论与首席决策。把结论和依据一起留下，下一次复盘才有东西可对。
+            </p>
+            <div class="closing-actions" data-reveal>
+              <a class="btn btn--light" href="/app/register">
+                开始使用智盈 AI
+                <span class="btn-arrow" aria-hidden="true">→</span>
+              </a>
+              <a class="closing-login" href="/app/login">已有账号，登录</a>
+            </div>
+            <p class="closing-note" data-reveal>邮箱注册 · 无需安装 · 浏览器即可使用</p>
+          </div>
+
+          <dl class="closing-facts" data-reveal>
+            <div><dt>分析师</dt><dd>6 位</dd></div>
+            <div><dt>选股策略</dt><dd>5 条</dd></div>
+            <div><dt>覆盖标的</dt><dd>5,900+</dd></div>
+            <div><dt>报告导出</dt><dd>PDF</dd></div>
+          </dl>
+        </div>
+
+        <footer class="site-footer">
+          <div class="shell">
+            <div class="footer-top">
+              <div class="footer-brand">
+                <a class="brand brand--footer" href="/" aria-label="智盈 AI 首页">
+                  <img
+                    class="brand-logo"
+                    src="/logo-wordmark-light-480.png"
+                    alt="智盈 AI · A 股分析工作台"
+                    width="480"
+                    height="165"
+                  />
+                </a>
+                <p>
+                  六位分析师，一份可复盘的结论。<br />
+                  数字有出处，价位由代码计算。
+                </p>
+              </div>
+
+              <nav class="footer-col" aria-label="产品">
+                <p class="footer-col-title">产品</p>
+                <a href="/app/">工作台</a>
+                <a href="/app/screener">AI 选股</a>
+                <a href="/app/watchlist">自选股</a>
+                <a href="/app/reports">历史报告</a>
+              </nav>
+
+              <nav class="footer-col" aria-label="了解">
+                <p class="footer-col-title">了解</p>
+                <a href="#method">研究方法</a>
+                <a href="#analysts">六位分析师</a>
+                <a href="#strategies">选股策略</a>
+                <a href="#faq">常见问题</a>
+              </nav>
+
+              <div class="footer-col">
+                <p class="footer-col-title">数据来源</p>
+                <p>腾讯行情 / 新浪财经 / 东方财富</p>
+                <p>腾讯元宝搜索（可选）</p>
+                <p class="footer-small">行情可能延迟，以页面标注为准。</p>
+              </div>
+            </div>
+
+            <div class="footer-disclaimer">
+              <span>风险提示 / DISCLAIMER</span>
+              <p>
+                本产品输出的所有内容仅为技术研究与学习参考，不构成任何投资建议。股市有风险，投资需谨慎。页面中的行情、评分、价位与结论均为界面示意，不代表实时数据，也不构成收益承诺。
+              </p>
+            </div>
+
+            <div class="footer-bottom">
+              <span>© 2026 智盈 AI</span>
+              <span>研究参考 · 不构成投资建议</span>
+            </div>
+          </div>
+        </footer>
+      </section>
+    </main>
   </body>
 </html>

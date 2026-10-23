@@ -181,7 +181,7 @@ async function submit(): Promise<void> {
 
     <p class="mt-6 text-[13px] text-ink-2">
       已有账号？
-      <router-link to="/login" class="font-medium text-primary hover:text-primary-hover">
+      <router-link to="/login" class="font-medium text-primary underline-offset-2 hover:text-primary-hover hover:underline">
         直接登录
       </router-link>
     </p>

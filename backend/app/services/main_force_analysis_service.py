@@ -28,6 +28,7 @@ from app.llm.main_force_prompts import (
     build_analyst_prompt,
     build_final_prompt,
 )
+from app.providers.fund_flow_rank import flow_window_label, flow_window_source
 from app.providers.performance import EastmoneyPerformanceProvider
 from app.providers.symbols import parse_symbol
 from app.schemas.screener import (
@@ -61,6 +62,8 @@ logger = get_logger(__name__)
 TZ_SHANGHAI = ZoneInfo("Asia/Shanghai")
 
 MAX_ANALYSIS_CANDIDATES = 40
+# 主力追踪对齐参考项目：候选池取区间净流入前 100
+MAIN_FORCE_CANDIDATES = 100
 ANALYST_MAX_TOKENS = 6000
 FINAL_MAX_TOKENS = 6000
 ANALYST_CALL_TIMEOUT = float(settings.llm_analyst_timeout_seconds)
@@ -103,7 +106,9 @@ def build_candidate_rows(
                 "amount_yi": _yi(item.amount),
                 "pe": quote.pe if quote else None,
                 "pb": quote.pb if quote else None,
-                "market_cap_yi": _yi(quote.total_market_cap) if quote else None,
+                "market_cap_yi": _yi(
+                    quote.total_market_cap if quote else item.market_cap
+                ),
                 "industry": perf.industry if perf else "",
                 "revenue_growth": perf.revenue_growth if perf else None,
                 "profit_growth": perf.profit_growth if perf else None,
@@ -113,14 +118,17 @@ def build_candidate_rows(
     return rows
 
 
-def build_summary(rows: list[dict]) -> str:
+def build_summary(rows: list[dict], window_label: str = "") -> str:
     total = len(rows)
     total_net = sum(row["main_net_yi"] or 0 for row in rows)
     avg_change = sum(row["change_pct"] or 0 for row in rows) / total if total else 0
-    lines = [
+    lines = []
+    if window_label:
+        lines.append(f"统计区间: {window_label}")
+    lines += [
         f"候选股票总数: {total}只",
         f"主力资金合计净流入: {total_net:.2f}亿",
-        f"平均涨跌幅: {avg_change:.2f}%",
+        f"平均区间涨跌幅: {avg_change:.2f}%",
     ]
     industries = Counter(
         row["industry"] for row in rows if row.get("industry")
@@ -137,10 +145,13 @@ def _num(value: float | None, digits: int) -> str:
     return f"{value:.{digits}f}" if value is not None else "-"
 
 
-def build_candidate_table(rows: list[dict]) -> str:
+def build_candidate_table(rows: list[dict], window_label: str = "") -> str:
     """紧凑表格，避免长 JSON 把提示词撑到上万 token。"""
+    change_header = f"{window_label}涨幅% " if window_label else "区间涨幅% "
     header = (
-        "代码 名称 行业 价格 涨幅% 主力净额(亿) 净占比% 成交额(亿) "
+        "代码 名称 行业 价格 "
+        + change_header
+        + f"{window_label or '区间'}主力净额(亿) 净占比% 成交额(亿) "
         "PE PB 总市值(亿) 营收同比% 净利同比% 报告期"
     )
     lines = [header]
@@ -466,12 +477,13 @@ async def analyze_main_force(
     llm_client = _ensure_client(llm_client)
     quota_used = await _ensure_quota(redis, user_id, daily_quota)
 
-    await _phase(on_phase, "获取主力资金排行")
-    items = await load_fund_flow_rank(redis)
+    window_label = flow_window_label(request.window)
+    await _phase(on_phase, f"获取{window_label}主力资金排行")
+    items = await load_fund_flow_rank(redis, request.window)
     filtered = filter_main_force(items, request)
     if not filtered:
         raise MainForceEmptyError("当前条件下没有可分析的候选标的")
-    candidates = filtered[:MAX_ANALYSIS_CANDIDATES]
+    candidates = filtered[:MAIN_FORCE_CANDIDATES]
 
     await _phase(on_phase, "补充行情与业绩数据")
     quotes = await fetch_quotes([parse_symbol(item.symbol) for item in candidates])
@@ -485,8 +497,8 @@ async def analyze_main_force(
         performance = {}
 
     rows = build_candidate_rows(candidates, quotes, performance)
-    summary = build_summary(rows)
-    table = build_candidate_table(rows)
+    summary = build_summary(rows, window_label)
+    table = build_candidate_table(rows, window_label)
 
     return await _run_ai_selection(
         redis,
@@ -500,7 +512,7 @@ async def analyze_main_force(
         final_n=request.final_n,
         llm_client=llm_client,
         on_phase=on_phase,
-        source="sina_fundflow+eastmoney_performance+tencent",
+        source=f"{flow_window_source(request.window)}+eastmoney_performance+tencent",
         disclaimer="AI 分析基于公开资金流、行业与财务数据，仅供研究参考，不构成投资建议。",
     )
 

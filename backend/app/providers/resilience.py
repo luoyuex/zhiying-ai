@@ -105,18 +105,23 @@ class TokenBucket:
         self._burst = burst
         self._key = f"mkt:tb:{name}"
 
+    async def _take(self) -> bool | None:
+        """取一个令牌；Redis 故障返回 None（放行）。"""
+        try:
+            allowed = await self._redis.eval(
+                self._LUA, 1, self._key, self._burst, self._rate, time.time()
+            )
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("令牌桶不可用，放行: %s", exc)
+            return None
+        return int(allowed) == 1
+
     async def acquire(self, timeout: float = 0.8) -> None:
         loop = asyncio.get_running_loop()
         deadline = loop.time() + timeout
         while True:
-            try:
-                allowed = await self._redis.eval(
-                    self._LUA, 1, self._key, self._burst, self._rate, time.time()
-                )
-            except Exception as exc:  # noqa: BLE001
-                logger.warning("令牌桶不可用，放行: %s", exc)
-                return
-            if int(allowed) == 1:
+            allowed = await self._take()
+            if allowed is None or allowed:
                 return
             if loop.time() >= deadline:
                 raise ProviderRateLimited(f"{self._key} 本地限流")

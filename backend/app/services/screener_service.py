@@ -1,6 +1,7 @@
 """选股服务：主力资金排行筛选。"""
 
 import json
+import time
 from dataclasses import dataclass
 from datetime import datetime
 from typing import Protocol
@@ -9,9 +10,16 @@ from zoneinfo import ZoneInfo
 from redis.asyncio import Redis
 
 from app.core.logging import get_logger
-from app.providers.base import ProviderUnavailable
-from app.providers.fund_flow_rank import SinaFundFlowRankProvider
-from app.providers.http import fetch, provider_slot
+from app.providers.base import (
+    DataNotFound,
+    ProviderSchemaDrift,
+    ProviderUnavailable,
+)
+from app.providers.fund_flow_rank import (
+    EastmoneyFundFlowRankProvider,
+    SinaFundFlowRankProvider,
+    flow_window_source,
+)
 from app.providers.models import Quote
 from app.providers.performance import EastmoneyPerformanceProvider
 from app.providers.symbols import (
@@ -19,8 +27,8 @@ from app.providers.symbols import (
     StockSymbol,
     parse_symbol,
 )
-from app.providers.tencent import TencentProvider
 from app.schemas.screener import (
+    FlowWindow,
     FundFlowRankItem,
     LowPriceBullItem,
     LowPriceBullRequest,
@@ -35,21 +43,25 @@ from app.schemas.screener import (
     SmallCapRequest,
     SmallCapResponse,
 )
+from app.services.quote_batch import fetch_quotes
 
 logger = get_logger(__name__)
 TZ_SHANGHAI = ZoneInfo("Asia/Shanghai")
 
 RANK_CACHE_KEY = "mkt:screener:fundflow_rank"
-RANK_CACHE_TTL = 60
-RANK_LIMIT = 300
+# 东财 push2 对突发请求敏感：10 分钟内复用结果，另留 24h 过期副本兜底
+RANK_CACHE_TTL = 600
+RANK_STALE_TTL = 86400
+# 单次最多拉 4 页；参考项目取前 100，多取用于过滤 ST/板块/市值/涨幅后的补位
+RANK_LIMIT = 400
 
 STRATEGIES = [
     ScreenerStrategy(
         id="main_force",
         name="主力追踪",
         description=(
-            "AI 三位分析师（资金流向 / 行业板块 / 财务基本面）分析主力资金靠前标的，"
-            "由资深研究员精选最终结果。"
+            "按所选区间（今日/3/5/10 日）主力资金净流入排行，筛选 50–5000 亿市值、"
+            "区间涨幅可控的标的，由三位分析师与资深研究员精选。"
         ),
     ),
     ScreenerStrategy(
@@ -87,20 +99,76 @@ STRATEGIES = [
 ]
 
 
-async def load_fund_flow_rank(redis: Redis) -> list[FundFlowRankItem]:
+def _rank_cache_key(window: FlowWindow) -> str:
+    return f"{RANK_CACHE_KEY}:{window}"
+
+
+async def load_fund_flow_rank(
+    redis: Redis,
+    window: FlowWindow = "10d",
+) -> list[FundFlowRankItem]:
+    cache_key = _rank_cache_key(window)
+    cached_items: list[FundFlowRankItem] = []
+    cached_at = 0.0
     try:
-        cached = await redis.get(RANK_CACHE_KEY)
+        cached = await redis.get(cache_key)
         if cached:
-            return [FundFlowRankItem.model_validate(item) for item in json.loads(cached)]
+            payload = json.loads(cached)
+            if isinstance(payload, dict):
+                cached_items = [
+                    FundFlowRankItem.model_validate(item)
+                    for item in payload.get("items") or []
+                ]
+                cached_at = float(payload.get("fetched_at") or 0)
+            elif isinstance(payload, list):
+                cached_items = [
+                    FundFlowRankItem.model_validate(item) for item in payload
+                ]
+                cached_at = time.time()
     except Exception as exc:  # noqa: BLE001
         logger.warning("读取资金流排行缓存失败: %s", exc)
 
-    items = await SinaFundFlowRankProvider().fetch(limit=RANK_LIMIT)
+    now = time.time()
+    if cached_items and now - cached_at < RANK_CACHE_TTL:
+        return cached_items
+
+    try:
+        items = await EastmoneyFundFlowRankProvider().fetch(
+            window=window, limit=RANK_LIMIT
+        )
+    except (ProviderUnavailable, ProviderSchemaDrift, DataNotFound) as exc:
+        if window == "today":
+            try:
+                items = await SinaFundFlowRankProvider().fetch(limit=RANK_LIMIT)
+            except Exception:  # noqa: BLE001 - 新浪也失败时退回过期缓存
+                if cached_items:
+                    logger.warning("今日资金流排行不可用，使用过期缓存: %s", exc)
+                    return cached_items
+                raise exc from None
+            logger.warning("东财今日资金流排行不可用，回退新浪: %s", exc)
+        else:
+            if cached_items:
+                age_min = max(1, int((now - cached_at) / 60))
+                logger.warning(
+                    "东财 %s 资金流排行不可用，使用 %d 分钟前的缓存: %s",
+                    window,
+                    age_min,
+                    exc,
+                )
+                return cached_items
+            raise
+
     try:
         await redis.set(
-            RANK_CACHE_KEY,
-            json.dumps([item.model_dump() for item in items], ensure_ascii=False),
-            ex=RANK_CACHE_TTL,
+            cache_key,
+            json.dumps(
+                {
+                    "fetched_at": time.time(),
+                    "items": [item.model_dump() for item in items],
+                },
+                ensure_ascii=False,
+            ),
+            ex=RANK_STALE_TTL,
         )
     except Exception as exc:  # noqa: BLE001
         logger.warning("写入资金流排行缓存失败: %s", exc)
@@ -136,6 +204,10 @@ def filter_main_force(
         if request.max_change_pct is not None:
             if item.change_pct is None or item.change_pct > request.max_change_pct:
                 continue
+        if item.market_cap is not None:
+            cap_yi = item.market_cap / 1e8
+            if cap_yi < request.min_market_cap or cap_yi > request.max_market_cap:
+                continue
         if request.min_price is not None:
             if item.price is None or item.price < request.min_price:
                 continue
@@ -150,16 +222,20 @@ async def screen_main_force(
     redis: Redis,
     request: MainForceScreenRequest,
 ) -> MainForceScreenResponse:
-    items = await load_fund_flow_rank(redis)
+    items = await load_fund_flow_rank(redis, request.window)
     filtered = filter_main_force(items, request)
     return MainForceScreenResponse(
         items=filtered[: request.top_n],
         scanned_count=len(items),
         candidate_count=len(filtered),
         fetched_at=datetime.now(TZ_SHANGHAI),
+        source=flow_window_source(request.window),
         filters={
             "top_n": request.top_n,
+            "window": request.window,
             "max_change_pct": request.max_change_pct,
+            "min_market_cap": request.min_market_cap,
+            "max_market_cap": request.max_market_cap,
             "min_price": request.min_price,
             "max_price": request.max_price,
             "exclude_st": request.exclude_st,
@@ -168,30 +244,6 @@ async def screen_main_force(
             "exclude_bj": request.exclude_bj,
         },
     )
-
-
-QUOTE_BATCH_URL = "https://qt.gtimg.cn/q={}"
-QUOTE_BATCH_SIZE = 50
-
-
-async def fetch_quotes(symbols: list[StockSymbol]) -> dict[str, Quote]:
-    """腾讯批量报价：一次最多 50 只，单只失败不影响整批。"""
-    quotes: dict[str, Quote] = {}
-    for start in range(0, len(symbols), QUOTE_BATCH_SIZE):
-        chunk = symbols[start : start + QUOTE_BATCH_SIZE]
-        query = ",".join(item.prefixed for item in chunk)
-        try:
-            async with provider_slot():
-                response = await fetch(QUOTE_BATCH_URL.format(query))
-        except ProviderUnavailable as exc:
-            logger.warning("批量报价失败: %s", exc)
-            continue
-        for symbol in chunk:
-            try:
-                quotes[symbol.code] = TencentProvider.parse_quote(symbol, response.content)
-            except Exception as exc:  # noqa: BLE001 - 停牌/无报价的股票跳过
-                logger.info("批量报价解析失败 %s: %s", symbol.code, exc)
-    return quotes
 
 
 class _ExcludeOptions(Protocol):

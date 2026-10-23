@@ -47,7 +47,7 @@ function recordPicksLabel(record: ScreenerRecordSummary): string {
         v-for="record in records"
         :key="record.id"
         class="flex w-full items-center gap-3 border-b border-line px-4 py-3 last:border-b-0"
-        :class="activeRecordId === record.id ? 'bg-primary-soft/40' : ''"
+        :class="activeRecordId === record.id ? 'bg-surface' : ''"
       >
         <div class="min-w-0 flex-1">
           <div class="flex flex-wrap items-center gap-2">

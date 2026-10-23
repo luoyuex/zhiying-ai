@@ -1,0 +1,9 @@
+# 智盈 AI 是公开产品官网；工作台需要登录后才能使用。
+User-agent: *
+Allow: /
+Disallow: /app/
+Disallow: /app.html
+Disallow: /api/
+
+# 搜索与 AI 抓取：GPTBot、OAI-SearchBot、ChatGPT-User、ClaudeBot、
+# PerplexityBot、Googlebot、Bingbot、Baiduspider、Bytespider 均遵循以上规则。

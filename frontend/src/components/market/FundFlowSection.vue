@@ -132,7 +132,7 @@ watch(
       {{ error }}
       <button
         type="button"
-        class="ml-2 font-medium text-primary hover:text-primary-hover"
+        class="ml-2 font-medium text-primary underline-offset-2 hover:text-primary-hover hover:underline"
         @click="load"
       >
         重试
