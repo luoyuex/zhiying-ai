@@ -257,7 +257,21 @@ zhiying-ai/
 - 已内置：语义化 HTML、title/meta description、canonical、Open Graph / Twitter Card、Organization / WebSite / WebPage / SoftwareApplication / FAQPage 结构化数据、`robots.txt`、`llms.txt`（面向 AI 检索的站点摘要）。
 - 官网的交互逻辑在 `frontend/src/marketing/`，样式在 `frontend/src/styles/marketing.css`。
 - **上线前**：把 `frontend/index.html` 里的 canonical、`og:image`、`twitter:image` 改成正式域名的绝对地址（当前为相对路径），并基于正式域名补一份 `sitemap.xml`，把首页地址写进去。`robots.txt` 已允许搜索引擎与 AI 爬虫抓取官网，并禁止抓取 `/app/` 与 `/api/`。
-- 生产部署到 Nginx 时，官网与工作台需要分开回退：`/app` 及 `/app/*` 回退到 `app.html`，其余路径回退到 `index.html`，否则刷新工作台深链会落到官网。
+
+### 生产部署（Nginx）
+
+可直接参考 **`deploy/nginx.conf.example`**，要点只有三条：
+
+1. `root` 指向 `frontend/dist`，`index index.html` —— **`/` 必须落到官网 `index.html`**。不要把全局 fallback 指到 `app.html`，否则官网会被工作台顶掉（表现就是打开首页被要求登录）。
+2. `/app` 301 到 `/app/`；`location /app/` 用 `try_files $uri /app.html;` 回退到工作台入口，否则刷新 `/app/stock/600519` 这类深链会 404。
+3. `/api/` 反代 FastAPI(8010)，并 `proxy_buffering off`（SSE 分析进度需要）。
+
+部署 checklist：
+
+- [ ] 服务器上的是**最新** `dist`（`npm run build` 后整体上传 `frontend/dist`）；如果 `/` 打开还是工作台，先怀疑传的是旧构建
+- [ ] 浏览器/CDN 缓存已清（HTML 建议配 `Cache-Control: no-cache`，见示例配置）
+- [ ] `curl -I https://你的域名/` 返回 200 且 title 是官网；`curl -I https://你的域名/app/` 返回 200 且是 `app.html`
+- [ ] 未登录访问 `/app/` 会被前端带回官网首页；`/app/stock/600519` 这类深链未登录时进登录页并带 `redirect` 参数
 
 ---
 

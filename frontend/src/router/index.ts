@@ -81,9 +81,16 @@ router.beforeEach(async (to) => {
   await auth.bootstrap()
 
   if (to.meta.requiresAuth && !auth.isAuthenticated) {
+    // 工作台根路径未登录时回官网首页；深链仍进登录页并带上回跳地址。
+    // 仅当应用确实挂在 /app 下时才跳，避免服务器把 app.html 挂在 / 时造成回环。
+    if (to.path === '/' && window.location.pathname.startsWith(`${import.meta.env.BASE_URL}app`)) {
+      window.location.replace('/')
+      return false
+    }
+
     return {
       name: 'login',
-      query: to.fullPath === '/' ? {} : { redirect: to.fullPath },
+      query: { redirect: to.fullPath },
     }
   }
 

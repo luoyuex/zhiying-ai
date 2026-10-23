@@ -1,13 +1,12 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
-import { useRoute, useRouter } from 'vue-router'
+import { useRoute } from 'vue-router'
 
 import { useAuthStore } from '@/stores/auth'
 import AccountCenterModal from './AccountCenterModal.vue'
 
 const auth = useAuthStore()
 const route = useRoute()
-const router = useRouter()
 
 const menuOpen = ref(false)
 const accountOpen = ref(false)
@@ -56,7 +55,7 @@ function onDocumentKeydown(event: KeyboardEvent): void {
 async function handleLogout(): Promise<void> {
   closeMenu()
   await auth.logout()
-  await router.replace('/login')
+  window.location.replace('/')
 }
 
 onMounted(() => {
