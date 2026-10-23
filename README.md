@@ -51,7 +51,7 @@ npm run up          # 等价于 docker compose up -d
 cd backend
 uv sync             # 首次安装依赖
 uv run alembic upgrade head   # 建表
-uv run uvicorn app.main:app --reload --port 8010
+uv run uvicorn app.main:app --reload --reload-dir app --port 8010
 ```
 
 后端地址 <http://127.0.0.1:8010>，接口文档 <http://127.0.0.1:8010/docs>，健康检查 `/health`。

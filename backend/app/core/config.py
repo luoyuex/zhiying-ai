@@ -21,6 +21,15 @@ class Settings(BaseSettings):
     cors_origins: str = "http://localhost:5173"
     cookie_secure: bool = False
 
+    # 日志（文件落盘；log_dir 相对 backend 目录，绝对路径亦可）
+    log_dir: str = "logs"
+    log_max_bytes: int = 5_242_880
+    log_backup_count: int = 5
+
+    # 定时任务的默认执行时间（新用户/未自定义时使用；用户可在个人中心按任务线自定义）
+    automation_cron_hour: int = 17
+    automation_cron_minute: int = 35
+
     # 基础设施
     database_url: str = "postgresql+asyncpg://zhiying:zhiying@localhost:5432/zhiying"
     redis_url: str = "redis://localhost:6379/0"

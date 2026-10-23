@@ -6,6 +6,7 @@ import { aiApi, type AIConfig } from '@/api/ai'
 import { authApi } from '@/api/auth'
 import { reportsApi } from '@/api/reports'
 import { watchlistApi } from '@/api/watchlist'
+import AutomationSettingsView from '@/components/account/AutomationSettingsView.vue'
 import Button from '@/components/ui/Button.vue'
 import Input from '@/components/ui/Input.vue'
 import { useAuthStore } from '@/stores/auth'
@@ -18,7 +19,7 @@ const auth = useAuthStore()
 const router = useRouter()
 const route = useRoute()
 
-type AccountView = 'overview' | 'profile' | 'security'
+type AccountView = 'overview' | 'profile' | 'security' | 'automation'
 
 const profile = ref<User | null>(auth.user)
 const aiConfig = ref<AIConfig | null>(null)
@@ -83,6 +84,13 @@ const viewMeta = computed(() => {
       eyebrow: 'ACCOUNT SECURITY',
       title: '修改密码',
       desc: '修改后需要重新登录',
+    }
+  }
+  if (activeView.value === 'automation') {
+    return {
+      eyebrow: 'AUTOMATION',
+      title: '定时任务',
+      desc: '每日自动选股与自动分析自选股',
     }
   }
   return {
@@ -328,6 +336,29 @@ onBeforeUnmount(() => {
             </svg>
             资料设置
           </button>
+          <button
+            type="button"
+            class="mt-1 flex w-full items-center gap-2 rounded-md px-3 py-2 text-left text-[13px] transition-colors"
+            :class="
+              activeView === 'automation'
+                ? 'bg-canvas font-medium text-ink'
+                : 'text-ink-2 hover:bg-canvas/70 hover:text-ink'
+            "
+            @click="setView('automation')"
+          >
+            <svg
+              class="size-4 shrink-0"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="1.7"
+              aria-hidden="true"
+            >
+              <circle cx="12" cy="12" r="8.5" />
+              <path d="M12 7.5V12l3 2" stroke-linecap="round" />
+            </svg>
+            定时任务
+          </button>
           <div class="mt-6 text-[10px] font-medium tracking-wide text-ink-3">安全</div>
           <button
             type="button"
@@ -428,6 +459,18 @@ onBeforeUnmount(() => {
               @click="setView('profile')"
             >
               资料设置
+            </button>
+            <button
+              type="button"
+              class="rounded-md px-2.5 py-1.5 text-xs transition-colors"
+              :class="
+                activeView === 'automation'
+                  ? 'bg-surface-2 font-medium text-ink'
+                  : 'text-ink-3 hover:text-ink'
+              "
+              @click="setView('automation')"
+            >
+              定时任务
             </button>
             <button
               type="button"
@@ -596,6 +639,8 @@ onBeforeUnmount(() => {
               <p v-if="profileSuccess" class="text-xs text-down">{{ profileSuccess }}</p>
               <Button type="submit" size="sm" :loading="profileSaving">保存资料</Button>
             </form>
+
+            <AutomationSettingsView v-else-if="activeView === 'automation'" />
 
             <form
               v-else

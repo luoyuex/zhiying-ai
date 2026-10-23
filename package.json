@@ -7,7 +7,7 @@
     "up": "docker compose up -d",
     "down": "docker compose down",
     "logs": "docker compose logs -f",
-    "api": "uv run --directory backend uvicorn app.main:app --reload --host 127.0.0.1 --port 8010",
+    "api": "uv run --directory backend uvicorn app.main:app --reload --reload-dir app --host 127.0.0.1 --port 8010",
     "worker": "uv run --directory backend arq app.worker.WorkerSettings",
     "web": "npm --prefix frontend run dev",
     "migrate": "uv run --directory backend alembic upgrade head",

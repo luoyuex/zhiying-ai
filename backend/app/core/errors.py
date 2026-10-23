@@ -155,3 +155,7 @@ def watchlist_full(limit: int) -> AppError:
 
 def portfolio_empty() -> AppError:
     return AppError(ErrorCode.VALIDATION_ERROR, "自选股为空，请先添加股票再做组合诊断", 400)
+
+
+def validation(message: str) -> AppError:
+    return AppError(ErrorCode.VALIDATION_ERROR, message, 422)

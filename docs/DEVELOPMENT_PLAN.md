@@ -1,7 +1,7 @@
 # 智盈 AI 开发计划与进度总览
 
 > 本文档是项目的唯一进度真相源。每完成一个阶段，更新「状态」列与「已完成清单」，避免范围漂移与重复劳动。
-> 最后更新：2026-10-22（体验修复：重新诊断统一进度、雷达图标签、耗时跳秒；MARKET_UNAVAILABLE 排查）
+> 最后更新：2026-10-23（定时选股/定时分析上线并支持用户自定义执行时间；日志落盘；体验修复见 4.43）
 
 ---
 
@@ -752,14 +752,32 @@
 | 耗时跳秒修复 | 选股面板「已用时」直接绑定 2s 轮询的服务端值导致 0→2→4 跳秒；`useScreenerAI` 新增本地 1s 计时 `displayElapsed`（轮询返回时 `Math.max` 单调校准、新任务归零、恢复任务续上），五面板统一改绑 | ✅ |
 | 详情页计时校准 | `applyAIJob` 收到推送时直接覆盖本地计时可能轻微回跳，改为同样的 `Math.max` 单调校准（重新提交时先归零，不残留旧值） | ✅ |
 | MARKET_UNAVAILABLE 排查 | 选股任务 2s 内失败的定位过程：curl 直连东财/新浪均正常、后端 venv 直跑取数正常 → 锁定 worker 进程环境问题（worker 自上午未重启，启动终端的代理环境变量被 httpx `trust_env` 继承导致出站全部失败）；重启 worker 后恢复 | ✅ |
+| 日志落盘 | `core/logging.py` 增加滚动文件输出（stdout 保留）：API 写 `backend/logs/app.log`、worker 写 `worker.log`（分文件避免 Windows 多进程轮转冲突），默认 5MB × 5 份，`LOG_DIR`/`LOG_MAX_BYTES`/`LOG_BACKUP_COUNT` 可配，UTF-8 编码；`.env.example` 同步 | ✅ |
+| 定时选股 + 定时分析自选股 | 新表 `user_automation_settings`（迁移 `e5f6a7b8c9d0`）：每用户「每日定时选股」「每日定时分析自选股」开关 + 每策略自定义筛选参数（复用五个 `*AnalysisRequest` 校验）；`GET/PUT /automation/settings`；`daily_automation_service` 由 ARQ cron（默认 17:35，`AUTOMATION_CRON_HOUR/MINUTE` 可配）触发：LLM 检查 → 日期防重键 → 逐用户入队（复用 `start_screener_job`/`start_ai_job`），额度耗尽跳过、单用户失败隔离、时间守卫防提前执行；前端个人中心新增「定时任务」设置区（配置驱动共用表单） | ✅（见 4.44） |
 
 **经验记录**
 - `providers/http.py` 的 `trust_env=True` 会继承启动终端的代理变量：worker 必须从干净环境启动，或显式设置 `EGRESS_PROXY_URL`
-- 日志目前仅输出 stdout（无落盘），排查需依赖终端；建议补 RotatingFileHandler（见 5.4/九-15）
+- 日志已落盘（`backend/logs/app.log` / `worker.log`），排查数据源/worker 故障直接看文件，不必再翻启动终端
+- `--reload` 热重载在本机不可靠：backend/logs 日志高频写入 + 成批新增文件会让 watchfiles 静默丢事件（曾导致 API 长时间停留在旧代码）；启动命令已加 `--reload-dir app` 限定监听源码目录（package.json 与 README 同步），改 `.env`/迁移不会触发热重载；成批改动后务必重启 API 确认生效
+
+### 4.44 定时选股与定时分析自选股（2026-10-23）
+
+| 事项 | 内容 | 状态 |
+| --- | --- | --- |
+| 数据模型 | 新表 `user_automation_settings`（user 唯一、`screener_enabled`/`analysis_enabled` 开关、`strategy_settings` JSONB 存每策略参数），迁移 `e5f6a7b8c9d0` | ✅ |
+| 设置接口 | `GET/PUT /api/v1/automation/settings`（登录保护）；filters 用五个 `*AnalysisRequest` 校验并补全默认值，非法参数 422；`errors.validation` 工厂 | ✅ |
+| 调度器 | `daily_automation_service.run_daily_automation_task`：LLM 检查 → 计划时间守卫（防 worker 重启提前跑）→ `automation:ran:{date}` NX 防重 → 查 `status=active` 且开启开关的用户 → 逐用户入队；选股复用 `start_screener_job`（参数从设置反序列化），分析复用 `start_ai_job(force=False)` 并按剩余额度封顶；`QuotaExceededError` 跳过、`AIWorkerUnavailableError` 中止、单用户异常隔离 | ✅ |
+| Worker | `run_daily_automation` 注册进 functions 与 cron（`AUTOMATION_CRON_HOUR=17`/`AUTOMATION_CRON_MINUTE=35`，`run_at_startup=True` 补跑） | ✅ |
+| 前端 | 个人中心新增「定时任务」视图：两个总开关（样式化 toggle）、五策略多选 + 配置驱动参数表单（`automationSpecs.ts` 字段描述 + `mergeFilters` 默认值合并），保存一次性 PUT、无刷新回显 | ✅ |
+| 测试 | `test_automation_settings.py`（默认回显/读写/非法 filters/未知策略/用户隔离）+ `test_daily_automation.py`（时间守卫/防重/LLM 未配置跳过/入队参数/额度跳过/单用户失败隔离）；后端 **162 passed** | ✅ |
+
+**说明**：自动分析按剩余额度封顶入队（额度检查在缓存命中之前，超出的任务会直接失败，因此不入队）；防重与执行时间均为 per-user 粒度，手动重跑可删 `automation:ran:{日期}:{用户}:{任务}` 键；`AUTOMATION_CRON_HOUR/MINUTE` 仅作为新用户的默认执行时间。
+
+**2026-10-23 增强——用户自定义执行时间**：`user_automation_settings` 新增 4 列（迁移 `f6a7b8c9d0e1`），定时选股与定时分析各自可设执行时间（`screener_run_hour/minute`、`analysis_run_hour/minute`，24 小时制）；调度器从「每日固定 17:35 触发一次 + 全局防重」改为「每 5 分钟触发 + per-user 时间判断与 per-user 防重键（`automation:ran:{date}:{user}:{task}`）」，用户改时间保存后即时生效，无需重启 worker；实际执行可能比设定时间晚至多 5 分钟；前端两个任务卡片各带时间选择器；`AUTOMATION_CRON_HOUR/MINUTE` 降级为新用户默认值。
 
 ---
 
-## 五、未完成清单（截至 2026-10-22）
+## 五、未完成清单（截至 2026-10-23）
 
 ### 5.1 P1 收尾
 | 事项 | 说明 | 状态 |
@@ -790,7 +808,7 @@
 - ⬜ 持仓分析历史（持仓变动记录、收益归因）
 - ⬜ `llm/crypto.py`：AES-256-GCM 密钥加密（`APP_ENCRYPTION_KEY`）
 - ⬜ `usage_daily` 用量记账；`analysis_jobs`、`agent_runs`、`llm_providers`、`app_settings` 表
-- ⬜ 后端日志落盘（RotatingFileHandler → `backend/logs/`），便于排查 worker/数据源故障
+- ✅ 后端日志落盘（RotatingFileHandler → `backend/logs/`，app/worker 分文件；见 4.43）
 
 ### 5.5 P5–P7 缺口
 - ✅ 6 维雷达图（报告页评分卡）
@@ -894,8 +912,8 @@ npm run build       # vue-tsc + vite build
 7. ⬜ 个人中心增强：邮箱修改（验证码流程）、头像上传
 
 ### 第三优先：AI 决策闭环
-8. ⬜ 定时选股（ARQ cron：每日自动跑策略并落记录）
-9. ⬜ 定时分析（每日自动分析自选/持仓）
+8. ✅ 定时选股（ARQ cron：每日自动跑策略并落记录，见 4.44）
+9. ✅ 定时分析（每日自动分析自选股，用户可开关，见 4.44）
 10. ⬜ 评级变化标记（本次结论 vs 上次结论）
 11. ⬜ 关键价位提醒 + 邮件/Webhook 通知
 12. ⬜ 持仓分析历史（持仓变动、收益归因、调仓记录）
@@ -903,6 +921,6 @@ npm run build       # vue-tsc + vite build
 ### 第四优先：体验与技术债
 13. ✅ K 线叠加 MA/MACD/BOLL、个股资金流图、个股新闻列表（2026-10-22，见 4.42）
 14. ✅ 报告 6 维雷达、同股并排 diff、PDF 导出（2026-10-22，见 4.42）
-15. ⬜ 后端日志落盘（RotatingFileHandler，配合 worker 环境问题排查，见 4.43）
+15. ✅ 后端日志落盘（RotatingFileHandler，配合 worker 环境问题排查，见 4.43）
 16. ⬜ `llm/crypto.py` 密钥加密、`usage_daily` 用量记账
 17. ⬜ 管理后台 + 生产部署（Nginx/HTTPS/备份/压测）
