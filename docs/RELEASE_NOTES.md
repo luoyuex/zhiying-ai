@@ -4,6 +4,139 @@
 
 ---
 
+## 2026-10-25 · 自选增强、统一通知与后台 P1/P2
+
+### 本次更新
+
+**用户侧**
+
+- **评级变化标记**：新报告落库时与同股上一份报告对比，报告详情、个股 AI 卡、自选卡最新结论、历史报告列表显示「评级上调 / 下调」（持平不展示）。
+- **调仓记录**：自选股成本价或数量发生实际变化时记录一条调仓历史，自选卡「编辑 → 调仓记录」查看。
+- **关键价位提醒**：自选卡「提醒」可设置「涨到 / 跌破」目标价；交易日 09:30–15:00 每 5 分钟检查一次，触发后记录触发价并发送邮件。不消耗 AI 额度，触发一次后不再重复提醒，每用户最多同时保留 20 条生效提醒。
+- **统一通知设置**：个人中心「定时任务」更名为「定时与通知」；原「邮件通知」升级为「消息通知」：定时任务结果汇总、价位提醒各一个开关，共用一个接收地址。价位提醒留空时发送账号邮箱；关闭开关后只记录触发，不发邮件。
+
+**后台（仅管理员）**
+
+- **成本日报** `/app/admin/costs`：近 7/14/30 天调用数、成功率、token、估算成本；每日成本柱状图、任务类型与 Top 用户成本、调用明细（邮箱/任务/状态筛选）。
+- **任务中心** `/app/admin/jobs`：按类型/状态/来源/邮箱/代码筛选；详情含阶段、错误、任务参数、关联报告；**失败任务可重跑**（以用户身份提交、消耗 1 次额度、写管理员审计）。
+- **定时执行记录** `/app/admin/automation`：每日每用户每条任务线一条，记录已入队数量或跳过原因（额度不足 / 自选为空 / 未启用策略 / 队列不可用）。
+- **内容库** `/app/admin/content`：跨用户只读查看个股报告、选股记录、组合诊断与自选股，支持邮箱/股票/策略筛选与只读详情抽屉。
+
+**成本估算**
+
+- 新增可选配置 `LLM_PRICE_INPUT_PER_M` / `LLM_PRICE_OUTPUT_PER_M`（人民币 / 百万 token），两项都填才启用；未配置时后台成本显示「—」，不按 0 计算。
+
+### 影响范围
+
+| 项目 | 说明 |
+| --- | --- |
+| 数据库 | 3 个迁移：`b8c9d0e1f2a3`（评级变化列、调仓记录、价位提醒表）、`c9d0e1f2a3b4`（价位提醒邮件开关）、`d0e1f2a3b4c5`（定时执行记录表）；目标 head `d0e1f2a3b4c5` |
+| 后端 API | 自选新增调仓记录与价位提醒接口；后台新增成本/任务/定时执行/内容库接口 |
+| 后端 worker | 新增价位提醒 cron `run_price_alerts`（每 5 分钟，交易时段内生效）；定时调度器新增执行记录写入 |
+| 前端 | 自选卡新增提醒面板与调仓记录；个人中心改为「定时与通知」；后台新增 4 个页面，需要重新构建 |
+| 依赖 | 无新增 Python / npm 依赖 |
+
+> **worker 必须重启**：价位提醒检查是新增 cron，定时执行记录也由 worker 写入；只重启 API 不会生效。
+
+### 更新前确认
+
+- `.env` 的 SMTP 配置可用（价位提醒与定时汇总共用；`EMAIL_MODE=console` 时只打日志不发信）。
+- 可选：配置模型单价后，后台成本统计才有数字：
+
+```env
+LLM_PRICE_INPUT_PER_M=输入单价（人民币/百万 token）
+LLM_PRICE_OUTPUT_PER_M=输出单价（人民币/百万 token）
+```
+
+### 服务器更新步骤
+
+按顺序执行，方括号内为执行身份。
+
+#### 1. 备份数据库 `[zhiying]`
+
+```bash
+cd /opt/zhiying-ai
+docker compose exec -T postgres pg_dump -U zhiying -d zhiying -Fc \
+  | gzip > /var/backups/zhiying/zhiying-$(date +%F-%H%M).dump.gz
+```
+
+#### 2. 拉代码、装依赖、构建前端 `[zhiying]`
+
+```bash
+cd /opt/zhiying-ai
+git pull --ff-only
+
+cd /opt/zhiying-ai/backend
+~/.local/bin/uv sync --frozen --no-dev --python 3.12
+
+cd /opt/zhiying-ai/frontend
+npm ci
+npm run build
+```
+
+#### 3. 补充 `.env` 配置（可选） `[zhiying]`
+
+本次没有必填项。如需后台成本统计，把模型单价补到 `/opt/zhiying-ai/.env`（见上节）。
+
+#### 4. 停服务、执行迁移、启动 `[root]`
+
+```bash
+systemctl stop zhiying-api zhiying-worker
+cd /opt/zhiying-ai/backend
+.venv/bin/alembic upgrade head
+.venv/bin/alembic current
+systemctl start zhiying-worker zhiying-api
+```
+
+`alembic current` 期望输出包含 `d0e1f2a3b4c5 (head)`。
+
+#### 5. 验收
+
+- [ ] 自选股卡片：有多次分析记录的股票显示「评级上调/下调」；「编辑 → 调仓记录」能看到成本/数量变化
+- [ ] 自选卡「提醒」：能新增、取消提醒，面板显示实际收件地址
+- [ ] 个人中心「定时与通知」：定时汇总与价位提醒两个开关、共用接收地址，保存后刷新仍保留
+- [ ] `/app/admin/costs`：调用次数/成本/token 有数据（无数据时显示空态）
+- [ ] `/app/admin/jobs`：能看到任务列表，失败任务详情里有「重跑任务」按钮
+- [ ] `/app/admin/automation`：当天有执行记录（**需 worker 已重启**，且从本次上线当天开始记录）
+- [ ] `/app/admin/content`：四个 tab 能看到用户内容，详情抽屉正常
+
+数据库抽查：
+
+```bash
+cd /opt/zhiying-ai
+docker compose exec -T postgres psql -U zhiying -d zhiying -c "\d automation_runs"
+docker compose exec -T postgres psql -U zhiying -d zhiying -c "\d price_alerts"
+```
+
+#### 6. 价位提醒实测（可选） `[zhiying]`
+
+交易时段内，在自选卡给一只股票设置一条「涨到」略低于现价或「跌破」略高于现价的提醒，最多 5 分钟后应触发：
+
+```bash
+docker compose exec -T redis redis-cli --scan --pattern 'arq:*' >/dev/null  # 仅确认 redis 正常
+grep -E "价位提醒触发|价位提醒邮件" /opt/zhiying-ai/backend/logs/worker.log | tail
+```
+
+### 常见问题
+
+| 现象 | 排查 |
+| --- | --- |
+| 价位提醒一直不触发 | 确认 worker 已重启；只在交易日 09:30–15:00 检查；提醒状态是否已被触发（触发后不重复）；目标价是否设反 |
+| 收到了触发记录但没邮件 | 个人中心「定时与通知」里价位提醒邮件开关是否打开；`EMAIL_MODE` 是否为 `smtp`；查看 `worker.log` 的发信记录 |
+| 定时执行记录为空 | worker 未重启；或用户未启用定时任务、当天未到执行时间；记录从上线当天开始，不回填历史 |
+| 成本页显示「—」 | 未配置 `LLM_PRICE_INPUT_PER_M` / `LLM_PRICE_OUTPUT_PER_M`（两项都要填）；成本为估算值 |
+| 重跑按钮返回 409 | 只有失败任务能重跑；成功/运行中的任务会被拒绝 |
+| 后台页面 403 | 当前账号不是 `role=admin`，先执行 `create_admin.py --promote` |
+
+### 回滚
+
+1. 停服务：`systemctl stop zhiying-api zhiying-worker`
+2. 代码切回 `cf85d55`（上一个稳定版本）
+3. 回滚迁移（会删除调仓记录、价位提醒、定时执行记录数据）：`cd /opt/zhiying-ai/backend && .venv/bin/alembic downgrade a7b8c9d0e1f2`
+4. 重新构建前端、启动服务：`systemctl start zhiying-worker zhiying-api`
+
+---
+
 ## 2026-10-24 · 定时任务结果邮件通知
 
 ### 本次更新

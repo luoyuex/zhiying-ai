@@ -19,6 +19,13 @@ from app.llm.client import is_llm_configured
 from app.schemas.automation import STRATEGY_FILTER_MODELS
 from app.services.ai_analysis_service import QuotaExceededError, read_quota_used
 from app.services.ai_job_service import AIWorkerUnavailableError, start_ai_job
+from app.services.automation_run_log import (
+    STATUS_ENQUEUED,
+    STATUS_FAILED,
+    STATUS_NO_TASKS,
+    STATUS_QUOTA,
+    record_run,
+)
 from app.services.screener_job_service import start_screener_job
 
 logger = get_logger(__name__)
@@ -79,15 +86,87 @@ async def _collect_and_enqueue(redis) -> dict[str, int]:  # noqa: ANN001
             ):
                 key = _ran_key(now, user.id, "screener")
                 if await redis.set(key, "1", nx=True, ex=_RAN_KEY_TTL_SECONDS):
-                    stats["screener"] += await _enqueue_screener_jobs(
-                        redis, user, quota, automation.strategy_settings or {}
-                    )
+                    try:
+                        count = await _enqueue_screener_jobs(
+                            redis, user, quota, automation.strategy_settings or {}
+                        )
+                        stats["screener"] += count
+                        if count:
+                            await record_run(
+                                user.id,
+                                "screener",
+                                STATUS_ENQUEUED,
+                                enqueued=count,
+                                now=now,
+                            )
+                        else:
+                            await record_run(
+                                user.id,
+                                "screener",
+                                STATUS_NO_TASKS,
+                                reason="未启用任何策略",
+                                now=now,
+                            )
+                    except QuotaExceededError:
+                        await record_run(
+                            user.id,
+                            "screener",
+                            STATUS_QUOTA,
+                            reason="额度不足",
+                            now=now,
+                        )
+                        raise
+                    except AIWorkerUnavailableError:
+                        await record_run(
+                            user.id,
+                            "screener",
+                            STATUS_FAILED,
+                            reason="分析队列不可用",
+                            now=now,
+                        )
+                        raise
             if automation.analysis_enabled and _due(
                 now, automation.analysis_run_hour, automation.analysis_run_minute
             ):
                 key = _ran_key(now, user.id, "analysis")
                 if await redis.set(key, "1", nx=True, ex=_RAN_KEY_TTL_SECONDS):
-                    stats["analysis"] += await _enqueue_watchlist_analysis(redis, user, quota)
+                    try:
+                        count = await _enqueue_watchlist_analysis(redis, user, quota)
+                        stats["analysis"] += count
+                        if count:
+                            await record_run(
+                                user.id,
+                                "analysis",
+                                STATUS_ENQUEUED,
+                                enqueued=count,
+                                now=now,
+                            )
+                        else:
+                            await record_run(
+                                user.id,
+                                "analysis",
+                                STATUS_NO_TASKS,
+                                reason="自选列表为空",
+                                now=now,
+                            )
+                    except QuotaExceededError:
+                        await record_run(
+                            user.id,
+                            "analysis",
+                            STATUS_QUOTA,
+                            reason="额度不足",
+                            now=now,
+                        )
+                        raise
+                    except AIWorkerUnavailableError:
+                        await record_run(
+                            user.id,
+                            "analysis",
+                            STATUS_FAILED,
+                            reason="分析队列不可用",
+                            now=now,
+                        )
+                        raise
         except QuotaExceededError:
             logger.info("定时任务跳过剩余项：额度已用完 user=%s", user.id)
         except AIWorkerUnavailableError as exc:

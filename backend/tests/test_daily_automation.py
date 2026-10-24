@@ -7,6 +7,7 @@ from zoneinfo import ZoneInfo
 import pytest
 from sqlalchemy import delete, select
 
+from app.db.models.automation_run import AutomationRun
 from app.db.models.automation_settings import AutomationSettings
 from app.db.models.user import User
 from app.db.session import SessionLocal
@@ -200,6 +201,55 @@ async def test_run_enqueues_screener_and_analysis(patch_llm, monkeypatch):
         assert analysis_calls == watchlist_symbols
         assert any(":screener" in key for key in redis.store if key.startswith("automation:ran:"))
         assert any(":analysis" in key for key in redis.store if key.startswith("automation:ran:"))
+    finally:
+        await cleanup_user(user)
+
+
+async def test_run_records_execution_log(patch_llm, monkeypatch):
+    """每条任务线每天落一条执行记录：入队数、无任务、额度不足可查。"""
+    user = await make_user_with_settings(
+        screener_enabled=True,
+        analysis_enabled=True,
+        strategies={"main_force": {"enabled": True, "filters": {}}},
+    )
+
+    async def fake_start_screener(*_args, **_kwargs):
+        return None
+
+    async def fake_start_ai(*_args, **_kwargs):
+        return None
+
+    async def fake_read_quota_used(_redis, _user_id, *, strict=False):
+        return 0
+
+    async def fake_watchlist_symbols(_user_id):
+        return ["600519"]
+
+    monkeypatch.setattr(daily_automation_service, "start_screener_job", fake_start_screener)
+    monkeypatch.setattr(daily_automation_service, "start_ai_job", fake_start_ai)
+    monkeypatch.setattr(
+        daily_automation_service, "read_quota_used", fake_read_quota_used
+    )
+    monkeypatch.setattr(
+        daily_automation_service, "_watchlist_symbols", fake_watchlist_symbols
+    )
+
+    redis = FakeRedis()
+    try:
+        await daily_automation_service.run_daily_automation_task(redis)
+
+        async with SessionLocal() as session:
+            rows = (
+                await session.scalars(
+                    select(AutomationRun).where(AutomationRun.user_id == user.id)
+                )
+            ).all()
+        by_line = {row.line: row for row in rows}
+        assert set(by_line) == {"screener", "analysis"}
+        assert by_line["screener"].status == "enqueued"
+        assert by_line["screener"].enqueued == 1
+        assert by_line["analysis"].status == "enqueued"
+        assert by_line["analysis"].enqueued == 1
     finally:
         await cleanup_user(user)
 

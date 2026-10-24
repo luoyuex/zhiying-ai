@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends
 
-from app.api.v1.admin import audit, overview, users
+from app.api.v1.admin import audit, automation, content, costs, jobs, overview, users
 from app.core.deps import require_admin
 
 router = APIRouter(
@@ -10,4 +10,8 @@ router = APIRouter(
 )
 router.include_router(overview.router)
 router.include_router(users.router)
+router.include_router(costs.router)
+router.include_router(jobs.router)
+router.include_router(automation.router)
+router.include_router(content.router)
 router.include_router(audit.router)

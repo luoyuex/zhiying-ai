@@ -28,6 +28,7 @@ class ErrorCode:
     AI_SERVICE_UNAVAILABLE = "AI_SERVICE_UNAVAILABLE"
     WATCHLIST_FULL = "WATCHLIST_FULL"
     PRICE_ALERT_LIMIT = "PRICE_ALERT_LIMIT"
+    JOB_NOT_RETRYABLE = "JOB_NOT_RETRYABLE"
 
 
 class AppError(Exception):
@@ -157,6 +158,14 @@ def watchlist_full(limit: int) -> AppError:
 def price_alert_limit(limit: int) -> AppError:
     return AppError(
         ErrorCode.PRICE_ALERT_LIMIT, f"最多同时保留 {limit} 条生效中的提醒", 409
+    )
+
+
+def job_not_retryable(status: str) -> AppError:
+    return AppError(
+        ErrorCode.JOB_NOT_RETRYABLE,
+        f"只有失败任务可以重跑（当前状态：{status}）",
+        409,
     )
 
 

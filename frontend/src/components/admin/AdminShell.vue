@@ -17,6 +17,15 @@ const navGroups: { label: string; items: NavItem[] }[] = [
     items: [{ label: '运营总览', to: '/admin' }],
   },
   {
+    label: '运营',
+    items: [
+      { label: '成本日报', to: '/admin/costs' },
+      { label: '任务中心', to: '/admin/jobs' },
+      { label: '定时执行', to: '/admin/automation' },
+      { label: '内容库', to: '/admin/content' },
+    ],
+  },
+  {
     label: '用户',
     items: [{ label: '用户与额度', to: '/admin/users' }],
   },

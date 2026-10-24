@@ -125,6 +125,7 @@ export interface AdminOverview {
   success_rate: number | null
   tokens_total: number
   cost_estimate: number
+  unpriced_calls: number
   worker_alive: boolean
   queue_depth: number
   running_jobs: number
@@ -149,4 +150,172 @@ export interface AdminAuditLogItem {
   ip: string | null
   ua: string | null
   note: string | null
+}
+
+export interface AdminCostUser {
+  user_id: string | null
+  email: string
+  calls: number
+  tokens: number
+  cost: number
+}
+
+export interface AdminCostTask {
+  task: string
+  calls: number
+  tokens: number
+  cost: number
+}
+
+export interface AdminCostDaily {
+  date: string
+  calls: number
+  failures: number
+  tokens: number
+  cost: number
+}
+
+export interface AdminCostSummary {
+  days: number
+  since: string
+  calls: number
+  failures: number
+  success_rate: number | null
+  tokens: number
+  cost: number
+  unpriced_calls: number
+  data_since: string | null
+  daily: AdminCostDaily[]
+  top_users: AdminCostUser[]
+  top_tasks: AdminCostTask[]
+}
+
+export interface AdminCostCallItem {
+  id: number
+  created_at: string
+  user_id: string | null
+  user_email: string | null
+  job_id: string | null
+  task: string
+  model: string
+  prompt_tokens: number
+  completion_tokens: number
+  duration_ms: number
+  status: string
+  error_code: string | null
+  finish_reason: string | null
+  cost: number | null
+}
+
+export interface AdminJobItem {
+  id: string
+  kind: string
+  user_id: string
+  user_email: string | null
+  symbol: string | null
+  strategy: string | null
+  status: string
+  phase: string
+  trigger: string
+  created_at: string
+  started_at: string | null
+  finished_at: string | null
+  duration_ms: number | null
+  token_total: number
+  error_code: string | null
+  error_message: string | null
+  report_id: string | null
+  record_id: string | null
+}
+
+export interface AdminJobDetail extends AdminJobItem {
+  meta: Record<string, unknown> | null
+}
+
+export interface AdminJobRetryResponse {
+  ok: boolean
+  job_id: string
+  status: string
+  message: string
+}
+
+export interface AdminAutomationRunItem {
+  id: number
+  run_date: string
+  user_id: string
+  user_email: string | null
+  line: string
+  status: string
+  enqueued: number
+  reason: string | null
+  created_at: string
+}
+
+export interface AdminContentReportItem {
+  id: string
+  user_id: string
+  user_email: string | null
+  symbol: string
+  name: string
+  rating: string
+  confidence: number
+  rating_change: string | null
+  prev_rating: string | null
+  decision_source: string
+  created_at: string
+}
+
+export interface AdminContentReportDetail extends AdminContentReportItem {
+  // 管理员只读页按需渲染，结构随报告版本变化
+  report: Record<string, any>
+}
+
+export interface AdminContentScreenerPick {
+  rank: number
+  symbol: string
+  name: string
+}
+
+export interface AdminContentScreenerItem {
+  id: string
+  user_id: string
+  user_email: string | null
+  strategy: string
+  analyzed_count: number
+  recommendation_count: number
+  model: string
+  picks: AdminContentScreenerPick[]
+  created_at: string
+}
+
+export interface AdminContentScreenerDetail extends AdminContentScreenerItem {
+  filters: Record<string, any>
+  result: Record<string, any>
+}
+
+export interface AdminContentPortfolioItem {
+  id: string
+  user_id: string
+  user_email: string | null
+  health_score: number
+  position_count: number
+  summary: string
+  created_at: string
+}
+
+export interface AdminContentPortfolioDetail extends AdminContentPortfolioItem {
+  model: string
+  report: Record<string, any>
+}
+
+export interface AdminContentWatchlistItem {
+  id: string
+  user_id: string
+  user_email: string | null
+  symbol: string
+  name: string
+  note: string
+  cost_price: number | null
+  quantity: number | null
+  created_at: string
 }

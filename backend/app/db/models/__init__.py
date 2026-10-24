@@ -1,6 +1,7 @@
 from app.db.models.admin_audit_log import AdminAuditLog
 from app.db.models.ai_job import AIJob
 from app.db.models.analysis_report import AnalysisReport
+from app.db.models.automation_run import AutomationRun
 from app.db.models.automation_settings import AutomationSettings
 from app.db.models.llm_call import LLMCall
 from app.db.models.portfolio_diagnosis import PortfolioDiagnosisRecord
@@ -16,6 +17,7 @@ __all__ = [
     "AIJob",
     "AdminAuditLog",
     "AnalysisReport",
+    "AutomationRun",
     "AutomationSettings",
     "LLMCall",
     "PortfolioDiagnosisRecord",

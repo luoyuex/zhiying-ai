@@ -84,6 +84,30 @@ const router = createRouter({
           meta: { title: '后台概览' },
         },
         {
+          path: 'costs',
+          name: 'admin-costs',
+          component: () => import('@/pages/admin/CostsPage.vue'),
+          meta: { title: '成本日报' },
+        },
+        {
+          path: 'jobs',
+          name: 'admin-jobs',
+          component: () => import('@/pages/admin/JobsPage.vue'),
+          meta: { title: '任务中心' },
+        },
+        {
+          path: 'automation',
+          name: 'admin-automation',
+          component: () => import('@/pages/admin/AutomationRunsPage.vue'),
+          meta: { title: '定时执行记录' },
+        },
+        {
+          path: 'content',
+          name: 'admin-content',
+          component: () => import('@/pages/admin/ContentPage.vue'),
+          meta: { title: '内容库' },
+        },
+        {
           path: 'users',
           name: 'admin-users',
           component: () => import('@/pages/admin/UsersPage.vue'),

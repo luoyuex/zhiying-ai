@@ -192,6 +192,9 @@ LLM_FINAL_REASONING_EFFORT=default
 LLM_MAX_TOKENS=8192
 LLM_ANALYST_MAX_TOKENS=8000
 LLM_FINAL_MAX_TOKENS=16000
+# 可选：当前模型每百万 token 单价（人民币）；两项都填才启用后台成本估算
+LLM_PRICE_INPUT_PER_M=
+LLM_PRICE_OUTPUT_PER_M=
 
 # ===== 任务队列 =====
 AI_JOB_EXECUTION=arq
@@ -832,7 +835,7 @@ systemctl start zhiying-worker zhiying-api
 - 每个版本需要手动补充的配置与专项验收见 **[RELEASE_NOTES.md](RELEASE_NOTES.md)**。
 - **不要运行 `git clean -fdx`**：`.env`、日志、`docker-compose.override.yml` 都在忽略列表中，会被删除。
 - 更新后对照 `.env.example`，如果新增了配置键，需要手动补到 `.env`。
-- **worker 必须重启**：定时任务调度、汇总邮件等 cron 在 worker 进程内注册，只重启 API 不会加载新代码。
+- **worker 必须重启**：定时任务调度、汇总邮件、价位提醒检查等 cron 在 worker 进程内注册，只重启 API 不会加载新代码。
 - 当前 ARQ worker 没有设置 `job_completion_wait`，`systemctl stop/restart zhiying-worker` 会立即取消正在跑的 AI / 选股任务。发布尽量避开用户使用高峰。
 - worker 启动时会立即执行一次定时任务调度。若当天已过用户设定的时间且尚未跑过，启动后会补跑；发布尽量避开默认的 17:35 等任务时间点。
 - API 重启不会中断 worker 中的 AI 任务，但会断开浏览器 SSE 连接；前端会自动回退到轮询，刷新页面也能恢复。

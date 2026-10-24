@@ -1,5 +1,18 @@
 import type {
   AdminAuditLogItem,
+  AdminAutomationRunItem,
+  AdminContentPortfolioDetail,
+  AdminContentPortfolioItem,
+  AdminContentReportDetail,
+  AdminContentReportItem,
+  AdminContentScreenerDetail,
+  AdminContentScreenerItem,
+  AdminContentWatchlistItem,
+  AdminCostCallItem,
+  AdminCostSummary,
+  AdminJobDetail,
+  AdminJobItem,
+  AdminJobRetryResponse,
   AdminOverview,
   AdminResetQuotaResponse,
   AdminRevokeSessionsResponse,
@@ -31,6 +44,46 @@ export interface AdminAuditQuery {
   action?: string
   target_type?: string
   target_id?: string
+  date_from?: string
+  date_to?: string
+}
+
+export interface AdminCostCallQuery {
+  page?: number
+  page_size?: number
+  task?: string
+  status?: string
+  q?: string
+  date_from?: string
+  date_to?: string
+}
+
+export interface AdminJobQuery {
+  page?: number
+  page_size?: number
+  kind?: string
+  status?: string
+  trigger?: string
+  q?: string
+  date_from?: string
+  date_to?: string
+}
+
+export interface AdminAutomationRunQuery {
+  page?: number
+  page_size?: number
+  run_date?: string
+  line?: string
+  status?: string
+  q?: string
+}
+
+export interface AdminContentQuery {
+  page?: number
+  page_size?: number
+  q?: string
+  symbol?: string
+  strategy?: string
   date_from?: string
   date_to?: string
 }
@@ -76,5 +129,73 @@ export const adminApi = {
 
   auditLogs(params: AdminAuditQuery) {
     return http.get<Page<AdminAuditLogItem>>('/admin/audit-logs', { params })
+  },
+
+  costSummary(days: number) {
+    return http.get<AdminCostSummary>('/admin/costs/summary', { params: { days } })
+  },
+
+  costCalls(params: AdminCostCallQuery) {
+    return http.get<Page<AdminCostCallItem>>('/admin/costs/calls', { params })
+  },
+
+  jobs(params: AdminJobQuery) {
+    return http.get<Page<AdminJobItem>>('/admin/jobs', { params })
+  },
+
+  job(id: string) {
+    return http.get<AdminJobDetail>(`/admin/jobs/${encodeURIComponent(id)}`)
+  },
+
+  retryJob(id: string) {
+    return http.post<AdminJobRetryResponse>(
+      `/admin/jobs/${encodeURIComponent(id)}/retry`,
+    )
+  },
+
+  automationRuns(params: AdminAutomationRunQuery) {
+    return http.get<Page<AdminAutomationRunItem>>('/admin/automation-runs', {
+      params,
+    })
+  },
+
+  contentReports(params: AdminContentQuery) {
+    return http.get<Page<AdminContentReportItem>>('/admin/reports', { params })
+  },
+
+  contentReport(id: string) {
+    return http.get<AdminContentReportDetail>(
+      `/admin/reports/${encodeURIComponent(id)}`,
+    )
+  },
+
+  contentScreenerRecords(params: AdminContentQuery) {
+    return http.get<Page<AdminContentScreenerItem>>('/admin/screener-records', {
+      params,
+    })
+  },
+
+  contentScreenerRecord(id: string) {
+    return http.get<AdminContentScreenerDetail>(
+      `/admin/screener-records/${encodeURIComponent(id)}`,
+    )
+  },
+
+  contentPortfolios(params: AdminContentQuery) {
+    return http.get<Page<AdminContentPortfolioItem>>('/admin/portfolio-diagnoses', {
+      params,
+    })
+  },
+
+  contentPortfolio(id: string) {
+    return http.get<AdminContentPortfolioDetail>(
+      `/admin/portfolio-diagnoses/${encodeURIComponent(id)}`,
+    )
+  },
+
+  contentWatchlist(params: AdminContentQuery) {
+    return http.get<Page<AdminContentWatchlistItem>>('/admin/watchlist-items', {
+      params,
+    })
   },
 }

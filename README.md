@@ -2,12 +2,12 @@
 
 A 股 AI 分析工作台。前端 Vue 3 + TypeScript，后端 FastAPI + PostgreSQL + Redis。
 
-当前进度：用户侧核心功能已上线（邮箱认证、个股 AI 分析、自选/组合诊断、五策略选股、定时任务、历史报告/对比/PDF）；**后台管理 P0 已上线**（运营总览、用户与额度、审计、LLM 调用与任务台账），P1–P4 见 [开发计划](docs/DEVELOPMENT_PLAN.md)。
+当前进度：用户侧核心功能已上线（邮箱认证、个股 AI 分析、自选/组合诊断、五策略选股、定时任务、评级变化与价位提醒、历史报告/对比/PDF）；**后台管理 P0–P2 已上线**（运营总览、用户与额度、审计、LLM 调用与任务台账、成本日报、任务中心、定时执行记录、跨用户内容库），P3–P4 见 [开发计划](docs/DEVELOPMENT_PLAN.md)。
 
 **当前可用功能**
 
 - 邮箱验证码注册、密码/验证码登录、重置密码
-- **管理后台** `/app/admin`（仅管理员）：运营总览、用户搜索/额度/封禁/强制下线、操作审计；LLM 调用与 AI 任务开始落库（成本日报/任务中心在 P1）
+- **管理后台** `/app/admin`（仅管理员）：运营总览、用户搜索/额度/封禁/强制下线、操作审计；成本日报（按日聚合 token/估算成本）、任务中心（筛选/详情/失败重跑）、定时执行记录（含跳过原因）、跨用户内容库（报告/选股/组合诊断/自选只读）
 - 工作台「个股查询」：输入 6 位代码或点快捷标的，**直接进入个股详情页**；工作台不再预加载行情，避免重复查询
 - 个股详情页 `/stock/:symbol`：统一加载报价、12 项指标、日/周/月 K、前复权/后复权/不复权；支持页面内切换代码
 - **技术面诊断**：基于 90 根日 K 前复权计算评分/评级、趋势、MA/MACD/RSI/BOLL/ATR/量比信号、支撑压力，以及由代码计算的三档价位
@@ -15,6 +15,9 @@ A 股 AI 分析工作台。前端 Vue 3 + TypeScript，后端 FastAPI + PostgreS
 - **六分析师 + 首席决策**：技术面/基本面/资金面/风险/情绪/新闻六份结构化报告由代码基于真实数据生成；首席策略官 LLM 做最终决策（买入/持有/卖出 + 操作建议/持有周期/仓位/风险），失败自动规则兜底；三档价位始终由代码计算
 - **历史报告**：每次生成落库 PostgreSQL；顶栏头像菜单 →「历史报告」可查看当前用户全部记录（按日期分组、代码/名称筛选），也可在个股页查看该股最近 6 份；报告页完整展示六分析师全部依据/风险/数据源与首席决策
 - **定时任务**：个人中心可开启每日定时选股与自选股分析，自定义执行时间与各策略参数；可填写邮件接收地址，任务跑完后把当天结果汇总成一封邮件（同一天同一任务线仅一封）
+- **评级变化与调仓记录**：新报告自动与同股上一份对比，报告详情/个股页/自选卡/历史列表显示「评级上调/下调」；自选股成本或数量变化会记录调仓历史，可按需查看
+- **关键价位提醒**：自选卡可设置「涨到 / 跌破」目标价；交易日 09:30–15:00 每 5 分钟检查一次，触发后记录触发价并发送邮件（不消耗 AI 额度，触发一次后不再重复）。
+- **统一通知设置**：个人中心「定时与通知」统一管理定时任务汇总与价位提醒两个邮件开关，共用一个接收地址；价位提醒留空时发送到账号邮箱
 - **元宝搜索（可选）**：一次 AI 分析最多 1 次公开网页检索，缓存 30 分钟；命中 6h 报告缓存时连搜索也跳过
 - 接口：`/api/v1/stocks/{symbol}/quote`、`/kline`、`/analysis`、`/ai-analysis`、`/api/v1/ai/jobs/{id}`、`/api/v1/analysis/reports`
 
@@ -143,6 +146,9 @@ LLM_REASONING_EFFORT=default
 LLM_FINAL_REASONING_EFFORT=default
 LLM_ANALYST_MAX_TOKENS=8000
 LLM_FINAL_MAX_TOKENS=16000
+# 可选：当前模型每百万 token 单价（人民币）；两项都填才启用成本估算
+LLM_PRICE_INPUT_PER_M=
+LLM_PRICE_OUTPUT_PER_M=
 LLM_TEMPERATURE=0.3
 LLM_CACHE_SECONDS=21600
 ```
@@ -150,6 +156,8 @@ LLM_CACHE_SECONDS=21600
 > `LLM_TIMEOUT_SECONDS` 是单次调用超时；`LLM_ANALYST_TIMEOUT_SECONDS` 是每位分析师的超时；`LLM_JOB_TIMEOUT_SECONDS` 是整个后台任务超时。六位分析师按 `LLM_ANALYST_CONCURRENCY` 并发，免费/低配模型建议保持 3。
 >
 > 推理型模型（如 `sensenova-6.8-flash-lite`）的思考过程也计入 completion token。若日志出现 `finish_reason=length` / `LLM 思考过程耗尽 token`：`LLM_REASONING_EFFORT=default` 时代码会对 SenseNova 自动使用 `none`；其他推理模型可显式设 `none`/`low`。`max_tokens` 不能真正“无限”，上限由模型最大输出与上下文决定；`LLM_ANALYST_MAX_TOKENS` / `LLM_FINAL_MAX_TOKENS` 是选股专用上限。
+>
+> 后台的估算成本依赖模型单价：`LLM_PRICE_INPUT_PER_M` / `LLM_PRICE_OUTPUT_PER_M` 按“人民币 / 百万 token”填写，两项都填才启用；未配置时成本显示为“—”，不按 0 计算。内置表只包含少量 DeepSeek 模型，SenseNova 等自定义模型请用这两个键配置。
 >
 > 开发期不想被额度挡住：在 `.env` 设 `AI_DAILY_QUOTA_OVERRIDE=9999`，所有用户统一按该额度计算；设为 `0` 则恢复使用用户表的 `daily_analysis_quota`。改完需重启后端。
 
@@ -342,6 +350,15 @@ AI 配置状态（前缀 `/api/v1/ai`，需登录）：
 | POST | `/users/{id}/revoke-sessions` | 强制下线 |
 | GET | `/users/{id}/sessions` | 登录会话 |
 | GET | `/audit-logs` | 管理员操作审计 |
+| GET | `/costs/summary?days=14` | 成本日报：按日聚合调用数/token/估算成本、Top 用户与任务 |
+| GET | `/costs/calls` | LLM 调用明细（邮箱/任务/状态筛选） |
+| GET | `/jobs`、`/jobs/{id}` | AI 任务列表与详情 |
+| POST | `/jobs/{id}/retry` | 重跑失败任务（以用户身份、消耗额度、写审计） |
+| GET | `/automation-runs` | 定时任务执行记录（含跳过原因） |
+| GET | `/reports`、`/reports/{id}` | 跨用户报告库与只读详情 |
+| GET | `/screener-records`、`/{id}` | 跨用户选股记录与只读详情 |
+| GET | `/portfolio-diagnoses`、`/{id}` | 跨用户组合诊断与只读详情 |
+| GET | `/watchlist-items` | 跨用户自选股列表 |
 
 管理员初始化（在 `backend` 目录）：
 
@@ -364,16 +381,15 @@ uv run pytest -q
 
 测试会真实写入 PostgreSQL 与 Redis（使用 `test-xxxx@example.com` 临时账号，结束后自动清理），运行前请先 `npm run up` 并执行迁移。
 
-当前覆盖 217 个用例（截至 2026-10-24）：认证链路、行情 Provider/缓存/API、技术诊断、LLM/六分析师/异步任务、元宝搜索（官方 TC3 + Bearer）、历史报告、后台权限/分页/写操作审计与任务台账。
+当前覆盖 242 个用例（截至 2026-10-25）：认证链路、行情 Provider/缓存/API、技术诊断、LLM/六分析师/异步任务、元宝搜索（官方 TC3 + Bearer）、历史报告、自选增强（评级变化/调仓记录/价位提醒）、后台权限/分页/写操作审计/成本聚合/任务重跑/定时执行记录/跨用户内容库。
 
 ---
 
 ## 下一步
 
-1. 后台 P1：LLM 成本日报、任务中心（实时态/重跑）、定时任务执行记录
-2. 后台 P2：跨用户内容库（报告/选股/组合诊断/自选）
-3. 后台 P3：数据源/代理/熔断/缓存、配置快照、日志查看
-4. 后台 P4：公告/反馈
+1. 后台 P3：数据源/代理/熔断/缓存、配置快照、日志查看
+2. 后台 P4：公告/反馈
+3. 生产部署（Nginx/HTTPS/备份/限流压测）
 
 ---
 

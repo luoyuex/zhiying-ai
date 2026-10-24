@@ -19,16 +19,27 @@ const LABELS: Record<string, string> = {
   scheduled: '定时',
   revoked: '已撤销',
   expired: '已过期',
+  enqueued: '已入队',
+  no_tasks: '无任务',
+  skipped_quota: '额度不足',
+  success: '成功',
+  error: '失败',
 }
 
 const text = computed(() => props.label ?? LABELS[props.value] ?? props.value)
 
 const tone = computed(() => {
-  if (props.value === 'banned' || props.value === 'failed') {
+  if (props.value === 'banned' || props.value === 'failed' || props.value === 'error') {
     return 'bg-danger-soft text-danger'
   }
+  if (props.value === 'skipped_quota') return 'bg-warn-soft text-warn'
   if (props.value === 'admin') return 'bg-primary-soft text-primary'
-  if (props.value === 'active' || props.value === 'succeeded') {
+  if (
+    props.value === 'active' ||
+    props.value === 'succeeded' ||
+    props.value === 'success' ||
+    props.value === 'enqueued'
+  ) {
     return 'bg-surface-2 text-ink'
   }
   return 'bg-surface-2 text-ink-3'
