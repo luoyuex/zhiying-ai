@@ -29,7 +29,7 @@ import {
   quoteToneClass,
   sourceLabel,
 } from '@/utils/market'
-import { analystScoreTone, decisionLevels } from '@/utils/report'
+import { analystScoreTone, decisionLevels, ratingChangeBadge } from '@/utils/report'
 
 const PERIODS = [
   { value: 'day', label: '日 K' },
@@ -176,6 +176,10 @@ const aiBarClass = computed(() => {
   if (rating === '看空' || rating === '偏空') return 'bg-down'
   return 'bg-flat'
 })
+
+const aiRatingChange = computed(() =>
+  ratingChangeBadge(aiReport.value?.rating_change, aiReport.value?.prev_rating),
+)
 
 const aiQuotaLeft = computed(() => {
   const config = aiConfig.value
@@ -886,6 +890,13 @@ onBeforeUnmount(() => {
                 >
                   {{ aiReport.analysis.rating }}
                 </span>
+                <span
+                  v-if="aiRatingChange"
+                  class="rounded-md px-2 py-0.5 text-[11px] font-medium"
+                  :class="aiRatingChange.tone"
+                >
+                  {{ aiRatingChange.label }}
+                </span>
                 <span class="text-xs text-ink-3">
                   {{ aiReport.analysis.trend }} · 置信度 {{ aiReport.analysis.confidence }}
                 </span>
@@ -920,6 +931,13 @@ onBeforeUnmount(() => {
                   :class="decisionBadgeClass"
                 >
                   {{ aiReport.decision.rating }}
+                </span>
+                <span
+                  v-if="aiRatingChange"
+                  class="rounded-md px-2 py-0.5 text-[11px] font-medium"
+                  :class="aiRatingChange.tone"
+                >
+                  {{ aiRatingChange.label }}
                 </span>
                 <span class="text-[11px] text-ink-3">
                   决策置信度 {{ aiReport.decision.confidence }} / 100

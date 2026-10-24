@@ -113,6 +113,8 @@ class AIAnalysisResponse(BaseModel):
     discussion: TeamDiscussion | None = None
     web_search_used: bool = False
     web_sources: list[WebSource] = Field(default_factory=list)
+    rating_change: str | None = None
+    prev_rating: str | None = None
     disclaimer: str
 
 

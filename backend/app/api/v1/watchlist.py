@@ -24,6 +24,9 @@ from app.schemas.portfolio import (
     PortfolioDiagnosisSummary,
 )
 from app.schemas.watchlist import (
+    PositionChangeEntry,
+    PriceAlertCreateRequest,
+    PriceAlertView,
     WatchlistAddRequest,
     WatchlistAddResponse,
     WatchlistBatchRequest,
@@ -35,6 +38,13 @@ from app.schemas.watchlist import (
 from app.services.ai_analysis_service import QuotaExceededError, QuotaServiceError
 from app.services.market_service import MarketDataService
 from app.services.portfolio_service import PortfolioEmptyError, diagnose_portfolio
+from app.services.price_alert_service import (
+    MAX_ACTIVE_ALERTS_PER_USER,
+    PriceAlertLimitError,
+    cancel_alert,
+    create_alert,
+    list_alerts,
+)
 from app.services.report_history_service import (
     get_latest_portfolio_diagnosis,
     get_portfolio_diagnosis,
@@ -46,6 +56,7 @@ from app.services.watchlist_service import (
     add_watchlist,
     batch_analyze,
     is_watchlisted,
+    list_position_history,
     list_watchlist,
     remove_watchlist,
     update_watchlist,
@@ -195,6 +206,63 @@ async def portfolio_history_detail(
     if detail is None:
         raise errors.not_found("组合诊断记录不存在")
     return detail
+
+
+@router.get("/alerts", response_model=list[PriceAlertView], summary="价位提醒列表")
+async def alerts_list(
+    user: User = Depends(get_current_user),
+) -> list[PriceAlertView]:
+    return await list_alerts(user.id)
+
+
+@router.post(
+    "/{symbol}/alerts",
+    response_model=PriceAlertView,
+    summary="创建价位提醒",
+)
+async def create_price_alert(
+    symbol: str,
+    payload: PriceAlertCreateRequest,
+    user: User = Depends(get_current_user),
+) -> PriceAlertView:
+    try:
+        return await create_alert(
+            user.id,
+            symbol,
+            direction=payload.direction,
+            target_price=payload.target_price,
+        )
+    except InvalidSymbolError as exc:
+        raise errors.invalid_symbol(str(exc)) from exc
+    except PriceAlertLimitError as exc:
+        raise errors.price_alert_limit(MAX_ACTIVE_ALERTS_PER_USER) from exc
+
+
+@router.delete("/alerts/{alert_id}", status_code=204, summary="取消价位提醒")
+async def cancel_price_alert(
+    alert_id: uuid.UUID,
+    user: User = Depends(get_current_user),
+) -> Response:
+    cancelled = await cancel_alert(user.id, alert_id)
+    if not cancelled:
+        raise errors.not_found("提醒不存在或已结束")
+    return Response(status_code=204)
+
+
+@router.get(
+    "/{symbol}/position-history",
+    response_model=list[PositionChangeEntry],
+    summary="调仓记录",
+)
+async def position_history(
+    symbol: str,
+    limit: int = Query(30, ge=1, le=100),
+    user: User = Depends(get_current_user),
+) -> list[PositionChangeEntry]:
+    try:
+        return await list_position_history(user.id, symbol, limit=limit)
+    except InvalidSymbolError as exc:
+        raise errors.invalid_symbol(str(exc)) from exc
 
 
 @router.get("/{symbol}", response_model=WatchlistStatus, summary="是否已自选")

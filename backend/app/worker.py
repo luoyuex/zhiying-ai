@@ -21,6 +21,7 @@ from app.services.ai_job_service import (
 from app.services.automation_mail_service import send_due_digests
 from app.services.daily_automation_service import run_daily_automation_task
 from app.services.job_ledger import reconcile_stale_jobs
+from app.services.price_alert_service import run_price_alert_check
 from app.services.screener_job_service import run_screener_job_task
 
 logger = get_logger(__name__)
@@ -67,6 +68,13 @@ async def run_automation_mail(ctx: dict) -> None:
     await send_due_digests(ctx["redis"])
 
 
+async def run_price_alerts(ctx: dict) -> None:
+    """关键价位提醒：交易时段内检查行情，触发后邮件通知。"""
+    count = await run_price_alert_check()
+    if count:
+        logger.info("价位提醒触发 %s 条", count)
+
+
 async def reconcile_jobs(ctx: dict) -> None:
     """把 worker 崩溃后长期停留的任务标为失败。"""
     count = await reconcile_stale_jobs(settings.llm_job_timeout_seconds + 120)
@@ -95,6 +103,7 @@ class WorkerSettings:
         run_screener_job,
         run_daily_automation,
         run_automation_mail,
+        run_price_alerts,
         reconcile_jobs,
     ]
     cron_jobs = [
@@ -115,6 +124,12 @@ class WorkerSettings:
             run_automation_mail,
             minute={2, 7, 12, 17, 22, 27, 32, 37, 42, 47, 52, 57},
             run_at_startup=True,
+        ),
+        # 价位提醒：交易时段内每 5 分钟检查一次（时段守卫在服务内部，非交易时段直接跳过）
+        cron(
+            run_price_alerts,
+            minute={4, 9, 14, 19, 24, 29, 34, 39, 44, 49, 54, 59},
+            run_at_startup=False,
         ),
     ]
     redis_settings = RedisSettings.from_dsn(settings.redis_url)

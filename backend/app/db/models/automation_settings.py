@@ -50,6 +50,10 @@ class AutomationSettings(Base):
     email_notify_enabled: Mapped[bool] = mapped_column(
         Boolean, default=False, server_default=text("false"), nullable=False
     )
+    # 价位提醒邮件开关（默认开启）：关闭后触发记录仍保留，只是不发邮件
+    price_alert_email_enabled: Mapped[bool] = mapped_column(
+        Boolean, default=True, server_default=text("true"), nullable=False
+    )
     notify_email: Mapped[str | None] = mapped_column(String(254))
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False

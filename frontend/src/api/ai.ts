@@ -88,6 +88,8 @@ export interface AIAnalysisResponse {
   discussion: TeamDiscussion | null
   web_search_used: boolean
   web_sources: WebSource[]
+  rating_change: string | null
+  prev_rating: string | null
   disclaimer: string
 }
 

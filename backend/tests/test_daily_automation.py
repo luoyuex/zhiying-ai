@@ -81,6 +81,18 @@ def patch_llm(monkeypatch):
     monkeypatch.setattr(daily_automation_service, "is_llm_configured", lambda: True)
 
 
+@pytest.fixture(autouse=True)
+def isolate_real_automation_users(monkeypatch):
+    """数据库里可能有真实账号开着定时任务（如开发账号），过滤到测试用户避免误报。"""
+    original = daily_automation_service._load_enabled_users
+
+    async def filtered():
+        rows = await original()
+        return [row for row in rows if str(row[0].email).startswith("auto-run-")]
+
+    monkeypatch.setattr(daily_automation_service, "_load_enabled_users", filtered)
+
+
 async def test_run_skipped_before_user_scheduled_time(patch_llm):
     # 用户时间设在 23:59，当前时间必然早于它 → 不应入队也不落防重键
     user = await make_user_with_settings(

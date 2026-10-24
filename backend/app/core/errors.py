@@ -27,6 +27,7 @@ class ErrorCode:
     ANALYSIS_QUOTA_EXCEEDED = "ANALYSIS_QUOTA_EXCEEDED"
     AI_SERVICE_UNAVAILABLE = "AI_SERVICE_UNAVAILABLE"
     WATCHLIST_FULL = "WATCHLIST_FULL"
+    PRICE_ALERT_LIMIT = "PRICE_ALERT_LIMIT"
 
 
 class AppError(Exception):
@@ -151,6 +152,12 @@ def ai_service_unavailable(message: str) -> AppError:
 
 def watchlist_full(limit: int) -> AppError:
     return AppError(ErrorCode.WATCHLIST_FULL, f"自选股最多 {limit} 只，请先移除部分股票", 409)
+
+
+def price_alert_limit(limit: int) -> AppError:
+    return AppError(
+        ErrorCode.PRICE_ALERT_LIMIT, f"最多同时保留 {limit} 条生效中的提醒", 409
+    )
 
 
 def portfolio_empty() -> AppError:

@@ -4,6 +4,8 @@ from app.db.models.analysis_report import AnalysisReport
 from app.db.models.automation_settings import AutomationSettings
 from app.db.models.llm_call import LLMCall
 from app.db.models.portfolio_diagnosis import PortfolioDiagnosisRecord
+from app.db.models.position_change_log import PositionChangeLog
+from app.db.models.price_alert import PriceAlert
 from app.db.models.refresh_token import RefreshToken
 from app.db.models.screener_record import ScreenerRecord
 from app.db.models.stock import Stock
@@ -17,6 +19,8 @@ __all__ = [
     "AutomationSettings",
     "LLMCall",
     "PortfolioDiagnosisRecord",
+    "PositionChangeLog",
+    "PriceAlert",
     "RefreshToken",
     "ScreenerRecord",
     "Stock",

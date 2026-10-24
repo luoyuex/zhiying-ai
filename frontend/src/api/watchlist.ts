@@ -8,6 +8,8 @@ export interface LatestAnalysis {
   decision_source: string
   position_action: string | null
   summary: string
+  rating_change: string | null
+  prev_rating: string | null
   created_at: string
 }
 
@@ -87,6 +89,29 @@ export interface PortfolioDiagnosisDetail {
   report: PortfolioDiagnosis
 }
 
+/** 调仓记录：成本价 / 数量每次变更落一条 */
+export interface PositionChangeEntry {
+  id: string
+  symbol: string
+  old_cost_price: number | null
+  new_cost_price: number | null
+  old_quantity: number | null
+  new_quantity: number | null
+  created_at: string
+}
+
+export interface PriceAlert {
+  id: string
+  symbol: string
+  name: string
+  direction: 'above' | 'below'
+  target_price: number
+  status: 'active' | 'triggered' | 'cancelled'
+  triggered_price: number | null
+  triggered_at: string | null
+  created_at: string
+}
+
 export const watchlistApi = {
   list() {
     return http.get<WatchlistEntry[]>('/watchlist')
@@ -132,6 +157,29 @@ export const watchlistApi = {
     return http.get<PortfolioDiagnosisDetail>(
       `/watchlist/portfolio-analysis/history/${encodeURIComponent(id)}`,
     )
+  },
+
+  /** 调仓记录：按需加载，不随列表自动请求 */
+  positionHistory(symbol: string, limit = 30) {
+    return http.get<PositionChangeEntry[]>(
+      `/watchlist/${encodeURIComponent(symbol)}/position-history`,
+      { params: { limit } },
+    )
+  },
+
+  alerts() {
+    return http.get<PriceAlert[]>('/watchlist/alerts')
+  },
+
+  createAlert(symbol: string, direction: 'above' | 'below', targetPrice: number) {
+    return http.post<PriceAlert>(`/watchlist/${encodeURIComponent(symbol)}/alerts`, {
+      direction,
+      target_price: targetPrice,
+    })
+  },
+
+  cancelAlert(alertId: string) {
+    return http.delete<void>(`/watchlist/alerts/${encodeURIComponent(alertId)}`)
   },
 
   remove(symbol: string) {

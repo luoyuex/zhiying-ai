@@ -50,10 +50,8 @@ async def run_daily_automation_task(redis) -> None:  # noqa: ANN001 - redis.asyn
         )
 
 
-async def _collect_and_enqueue(redis) -> dict[str, int]:  # noqa: ANN001
-    """查询开启定时任务的用户，到达各自执行时间的逐个入队；单用户失败不影响其他。"""
-    stats = {"screener": 0, "analysis": 0}
-    now = datetime.now(TZ_SHANGHAI)
+async def _load_enabled_users() -> list:  # noqa: ANN202
+    """查询开启定时任务的 active 用户；测试通过覆盖本函数隔离真实账号。"""
     async with SessionLocal() as session:
         stmt = (
             select(User, AutomationSettings)
@@ -64,7 +62,14 @@ async def _collect_and_enqueue(redis) -> dict[str, int]:  # noqa: ANN001
                 | (AutomationSettings.analysis_enabled.is_(True)),
             )
         )
-        rows = (await session.execute(stmt)).all()
+        return list((await session.execute(stmt)).all())
+
+
+async def _collect_and_enqueue(redis) -> dict[str, int]:  # noqa: ANN001
+    """查询开启定时任务的用户，到达各自执行时间的逐个入队；单用户失败不影响其他。"""
+    stats = {"screener": 0, "analysis": 0}
+    now = datetime.now(TZ_SHANGHAI)
+    rows = await _load_enabled_users()
 
     for user, automation in rows:
         try:

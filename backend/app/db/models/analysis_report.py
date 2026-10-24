@@ -37,6 +37,8 @@ class AnalysisReport(Base):
     model: Mapped[str] = mapped_column(String(64), default="", nullable=False)
     prompt_version: Mapped[str] = mapped_column(String(64), default="", nullable=False)
     report: Mapped[dict] = mapped_column(JSONB, nullable=False)
+    rating_change: Mapped[str | None] = mapped_column(String(8))
+    prev_rating: Mapped[str | None] = mapped_column(String(8))
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False, index=True
     )

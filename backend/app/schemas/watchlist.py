@@ -1,6 +1,8 @@
 """自选股接口模型。"""
 
 from datetime import datetime
+from enum import StrEnum
+from typing import Literal
 
 from pydantic import BaseModel, Field
 
@@ -12,6 +14,8 @@ class LatestAnalysis(BaseModel):
     decision_source: str
     position_action: str | None = None
     summary: str = ""
+    rating_change: str | None = None
+    prev_rating: str | None = None
     created_at: datetime
 
 
@@ -64,3 +68,35 @@ class WatchlistBatchResult(BaseModel):
     status: str = "queued"
     error_code: str | None = None
     error_message: str | None = None
+
+
+class PositionChangeEntry(BaseModel):
+    id: str
+    symbol: str
+    old_cost_price: float | None = None
+    new_cost_price: float | None = None
+    old_quantity: int | None = None
+    new_quantity: int | None = None
+    created_at: datetime
+
+
+class PriceAlertDirection(StrEnum):
+    ABOVE = "above"
+    BELOW = "below"
+
+
+class PriceAlertCreateRequest(BaseModel):
+    direction: Literal["above", "below"]
+    target_price: float = Field(gt=0)
+
+
+class PriceAlertView(BaseModel):
+    id: str
+    symbol: str
+    name: str
+    direction: str
+    target_price: float
+    status: str
+    triggered_price: float | None = None
+    triggered_at: datetime | None = None
+    created_at: datetime

@@ -30,6 +30,16 @@ export function ratingTone(rating: string): string {
   return 'bg-surface-2 text-ink-2'
 }
 
+/** 评级变化标记：本次结论与上一份报告对比（持平不展示，避免噪音） */
+export function ratingChangeBadge(
+  change: string | null | undefined,
+  prevRating: string | null | undefined,
+): { label: string; tone: string } | null {
+  if (change === 'up') return { label: '评级上调', tone: 'bg-up-soft text-up' }
+  if (change === 'down') return { label: '评级下调', tone: 'bg-down-soft text-down' }
+  return null
+}
+
 /** 分析师评分配色：越高越积极 */
 export function analystScoreTone(score: number): string {
   if (score >= 65) return 'text-up'

@@ -30,6 +30,7 @@ const analysisTime = ref('17:35')
 const enabledStrategies = ref<AutomationStrategyId[]>([])
 const formValues = ref<Record<string, Record<string, number | boolean | string | null>>>({})
 const emailNotifyEnabled = ref(false)
+const priceAlertEmailEnabled = ref(true)
 const notifyEmail = ref('')
 const screenerExpanded = ref(false)
 
@@ -80,6 +81,7 @@ function applySettings(data: AutomationSettings): void {
   formValues.value = values
   screenerExpanded.value = false
   emailNotifyEnabled.value = data.email_notify_enabled
+  priceAlertEmailEnabled.value = data.price_alert_email_enabled
   notifyEmail.value = data.notify_email || auth.user?.email || ''
 }
 
@@ -124,6 +126,7 @@ async function save(): Promise<void> {
       analysis_run_minute: analysis.minute,
       strategy_settings,
       email_notify_enabled: emailNotifyEnabled.value,
+      price_alert_email_enabled: priceAlertEmailEnabled.value,
       notify_email: notifyEmail.value.trim() || null,
     })
     applySettings(data)
@@ -305,11 +308,18 @@ async function save(): Promise<void> {
       </section>
 
       <section class="mt-3 rounded-lg border border-line bg-surface p-4">
-        <label class="flex cursor-pointer items-center justify-between gap-4">
+        <div>
+          <span class="block text-[13px] font-medium text-ink">消息通知</span>
+          <span class="mt-0.5 block text-[11px] text-ink-3">
+            定时任务汇总与价位提醒共用邮件设置；关闭后任务和提醒照常执行，只是不发送邮件
+          </span>
+        </div>
+
+        <label class="mt-4 flex cursor-pointer items-center justify-between gap-4 border-t border-line pt-3">
           <span>
-            <span class="block text-[13px] font-medium text-ink">邮件通知</span>
+            <span class="block text-[12px] font-medium text-ink">定时任务结果汇总</span>
             <span class="mt-0.5 block text-[11px] text-ink-3">
-              可选；开启后把定时任务结果汇总发到指定邮箱，不开启不影响任务执行
+              每天任务跑完后，把选股与分析结果合并成一封
             </span>
           </span>
           <input v-model="emailNotifyEnabled" type="checkbox" class="peer sr-only" />
@@ -318,19 +328,35 @@ async function save(): Promise<void> {
             aria-hidden="true"
           />
         </label>
-        <div v-if="emailNotifyEnabled" class="mt-4 border-t border-line pt-4">
+
+        <label class="mt-3 flex cursor-pointer items-center justify-between gap-4 border-t border-line pt-3">
+          <span>
+            <span class="block text-[12px] font-medium text-ink">价位提醒</span>
+            <span class="mt-0.5 block text-[11px] text-ink-3">
+              自选股设置的目标价触发时发送邮件（默认开启）
+            </span>
+          </span>
+          <input v-model="priceAlertEmailEnabled" type="checkbox" class="peer sr-only" />
+          <span
+            class="relative h-5 w-9 shrink-0 rounded-full bg-ink-3/30 transition-colors after:absolute after:left-0.5 after:top-0.5 after:size-4 after:rounded-full after:bg-white after:transition-transform peer-checked:bg-ink peer-checked:after:translate-x-4"
+            aria-hidden="true"
+          />
+        </label>
+
+        <div class="mt-3 border-t border-line pt-3">
           <label class="flex flex-wrap items-center justify-between gap-3 text-[11px] text-ink-3">
             <span>接收地址</span>
             <input
               v-model.trim="notifyEmail"
               type="email"
               autocomplete="email"
-              placeholder="name@example.com"
+              placeholder="默认发送到账号邮箱"
               class="w-60 rounded-md border border-line bg-canvas px-2 py-1.5 text-xs text-ink outline-none focus:border-ink-3"
             />
           </label>
           <p class="mt-2 text-[10px] leading-relaxed text-ink-3">
-            同一天同一项任务只发一封；多个策略与自选股结果合并发送。任务量较大时，会先发送已完成部分。
+            定时任务汇总需填写地址；价位提醒留空时发送到账号邮箱（{{ auth.user?.email || '—' }}）。
+            同一天同一项任务只发一封，多个结果合并发送。
           </p>
         </div>
       </section>

@@ -18,6 +18,24 @@ from app.schemas.report import AnalysisReportDetail, AnalysisReportSummary
 
 logger = get_logger(__name__)
 
+# 决策评级强弱序：卖出 < 持有 < 买入；未知评级不产生变化标记
+RATING_ORDER = {"卖出": 0, "看空": 0, "持有": 1, "中性": 1, "买入": 2, "看多": 2}
+
+
+def compute_rating_change(rating: str, prev_rating: str | None) -> str | None:
+    """与上一份报告对比评级方向：up / down / flat；首次或口径未知返回 None。"""
+    if not prev_rating:
+        return None
+    current_level = RATING_ORDER.get(rating)
+    prev_level = RATING_ORDER.get(prev_rating)
+    if current_level is None or prev_level is None:
+        return None
+    if current_level > prev_level:
+        return "up"
+    if current_level < prev_level:
+        return "down"
+    return "flat"
+
 
 async def save_analysis_report(
     user_id: object,
@@ -27,6 +45,20 @@ async def save_analysis_report(
     rating = decision.rating if decision else report.analysis.rating
     confidence = decision.confidence if decision else report.analysis.confidence
     async with SessionLocal() as session:
+        prev_row = await session.scalar(
+            select(AnalysisReport)
+            .where(
+                AnalysisReport.user_id == user_id,
+                AnalysisReport.symbol == report.symbol,
+            )
+            .order_by(AnalysisReport.created_at.desc())
+            .limit(1)
+        )
+        prev_rating = prev_row.rating if prev_row else None
+        rating_change = compute_rating_change(rating, prev_rating)
+        # 写回结果对象：JSONB 与 job 状态里的结果都带上变化标记
+        report.rating_change = rating_change
+        report.prev_rating = prev_rating
         row = AnalysisReport(
             user_id=user_id,
             symbol=report.symbol,
@@ -35,6 +67,8 @@ async def save_analysis_report(
             confidence=confidence,
             model=report.model,
             prompt_version=report.prompt_version,
+            rating_change=rating_change,
+            prev_rating=prev_rating,
             report=report.model_dump(mode="json"),
         )
         session.add(row)
@@ -73,6 +107,8 @@ async def list_analysis_reports(
                 model=row.model,
                 prompt_version=row.prompt_version,
                 decision_source=str(decision.get("decision_source") or ""),
+                rating_change=row.rating_change,
+                prev_rating=row.prev_rating,
                 created_at=row.created_at,
             )
         )

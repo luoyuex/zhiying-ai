@@ -50,6 +50,7 @@ class AutomationSettingsUpdate(BaseModel):
         default_factory=dict
     )
     email_notify_enabled: bool = False
+    price_alert_email_enabled: bool = True
     notify_email: EmailStr | None = None
 
     @field_validator("notify_email", mode="before")
@@ -96,5 +97,6 @@ class AutomationSettingsResponse(BaseModel):
     )
     strategy_settings: dict = Field(default_factory=dict)
     email_notify_enabled: bool = False
+    price_alert_email_enabled: bool = True
     notify_email: str | None = None
     updated_at: datetime | None = None

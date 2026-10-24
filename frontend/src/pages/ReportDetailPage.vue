@@ -11,7 +11,7 @@ import PublicInfoPanel from '@/components/report/PublicInfoPanel.vue'
 import { getErrorMessage } from '@/utils/errors'
 import { formatQuoteTime, formatSourceList } from '@/utils/market'
 import { exportElementToPdf, pdfFilename } from '@/utils/pdf'
-import { analystScoreTone, decisionLevels } from '@/utils/report'
+import { analystScoreTone, decisionLevels, ratingChangeBadge } from '@/utils/report'
 
 const route = useRoute()
 const router = useRouter()
@@ -70,6 +70,9 @@ const positionActionTone = computed(() => {
   if (action === '减仓' || action === '清仓') return 'bg-down-soft text-down'
   return 'bg-surface-2 text-ink-2'
 })
+const ratingChange = computed(() =>
+  ratingChangeBadge(report.value?.rating_change, report.value?.prev_rating),
+)
 const decisionLevelItems = computed(() => decisionLevels(decision.value?.levels))
 const coverageLabels = computed(() => {
   const analysts = report.value?.analysts ?? []
@@ -230,6 +233,13 @@ watch(
               <span class="text-xs tabular-nums text-ink-3">{{ report.symbol }}</span>
               <span v-if="decision" class="rounded-md px-2.5 py-1 text-sm font-semibold" :class="decisionBadgeClass">
                 {{ decision.rating }}
+              </span>
+              <span
+                v-if="ratingChange"
+                class="rounded-md px-2 py-1 text-[11px] font-medium"
+                :class="ratingChange.tone"
+              >
+                较上次{{ ratingChange.label }}
               </span>
             </div>
 

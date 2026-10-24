@@ -2,17 +2,23 @@
 
 import asyncio
 
-from sqlalchemy import delete, select, update
+from sqlalchemy import delete, select
 from sqlalchemy.dialects.postgresql import distinct_on, insert
 
 from app.core.logging import get_logger
 from app.db.models.analysis_report import AnalysisReport
+from app.db.models.position_change_log import PositionChangeLog
 from app.db.models.stock import Stock
 from app.db.models.watchlist import WatchlistItem
 from app.db.session import SessionLocal
 from app.llm.client import LLMNotConfiguredError
 from app.providers.symbols import InvalidSymbolError, StockSymbol, parse_symbol
-from app.schemas.watchlist import LatestAnalysis, WatchlistBatchResult, WatchlistEntry
+from app.schemas.watchlist import (
+    LatestAnalysis,
+    PositionChangeEntry,
+    WatchlistBatchResult,
+    WatchlistEntry,
+)
 from app.services.ai_job_service import AIWorkerUnavailableError, start_ai_job
 from app.services.market_service import MarketDataService
 from app.services.quote_batch import fetch_quotes
@@ -63,18 +69,71 @@ async def add_watchlist(
 
 
 async def update_watchlist(user_id: object, raw_symbol: str, changes: dict) -> bool:
-    """只更新传入的字段（备注 / 成本价 / 数量）。"""
+    """只更新传入的字段（备注 / 成本价 / 数量）；成本价或数量变化时写调仓记录。"""
     if not changes:
         return False
     symbol = parse_symbol(raw_symbol).code
     async with SessionLocal() as session:
-        result = await session.execute(
-            update(WatchlistItem)
-            .where(WatchlistItem.user_id == user_id, WatchlistItem.symbol == symbol)
-            .values(**changes)
+        row = await session.scalar(
+            select(WatchlistItem).where(
+                WatchlistItem.user_id == user_id, WatchlistItem.symbol == symbol
+            )
         )
+        if row is None:
+            return False
+
+        cost_changed = (
+            "cost_price" in changes and changes["cost_price"] != row.cost_price
+        )
+        qty_changed = "quantity" in changes and changes["quantity"] != row.quantity
+        if cost_changed or qty_changed:
+            session.add(
+                PositionChangeLog(
+                    user_id=user_id,
+                    symbol=symbol,
+                    old_cost_price=row.cost_price,
+                    new_cost_price=changes.get("cost_price", row.cost_price),
+                    old_quantity=row.quantity,
+                    new_quantity=changes.get("quantity", row.quantity),
+                )
+            )
+        for field, value in changes.items():
+            setattr(row, field, value)
         await session.commit()
-        return bool(result.rowcount)
+        return True
+
+
+async def list_position_history(
+    user_id: object,
+    raw_symbol: str,
+    *,
+    limit: int = 30,
+) -> list[PositionChangeEntry]:
+    symbol = parse_symbol(raw_symbol).code
+    async with SessionLocal() as session:
+        rows = (
+            await session.scalars(
+                select(PositionChangeLog)
+                .where(
+                    PositionChangeLog.user_id == user_id,
+                    PositionChangeLog.symbol == symbol,
+                )
+                .order_by(PositionChangeLog.created_at.desc())
+                .limit(limit)
+            )
+        ).all()
+    return [
+        PositionChangeEntry(
+            id=str(row.id),
+            symbol=row.symbol,
+            old_cost_price=float(row.old_cost_price) if row.old_cost_price is not None else None,
+            new_cost_price=float(row.new_cost_price) if row.new_cost_price is not None else None,
+            old_quantity=row.old_quantity,
+            new_quantity=row.new_quantity,
+            created_at=row.created_at,
+        )
+        for row in rows
+    ]
 
 
 async def remove_watchlist(user_id: object, raw_symbol: str) -> bool:
@@ -147,6 +206,8 @@ async def list_watchlist(
             decision_source=str(decision.get("decision_source") or ""),
             position_action=decision.get("position_action"),
             summary=str(decision.get("summary") or "")[:200],
+            rating_change=row.rating_change,
+            prev_rating=row.prev_rating,
             created_at=row.created_at,
         )
 

@@ -15,6 +15,8 @@ class AnalysisReportSummary(BaseModel):
     model: str
     prompt_version: str
     decision_source: str = ""
+    rating_change: str | None = None
+    prev_rating: str | None = None
     created_at: datetime
 
 

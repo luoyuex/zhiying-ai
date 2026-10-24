@@ -119,6 +119,8 @@ function applyJobResult(symbol: string, job: AIJobState): void {
     decision_source: decision?.decision_source ?? '',
     position_action: decision?.position_action ?? null,
     summary: (decision?.summary ?? job.result.analysis.summary).slice(0, 200),
+    rating_change: job.result.rating_change ?? null,
+    prev_rating: job.result.prev_rating ?? null,
     created_at: job.result.generated_at,
   }
 }

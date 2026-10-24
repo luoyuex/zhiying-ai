@@ -1,10 +1,18 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
 
-import { watchlistApi, type WatchlistEntry, type WatchlistJobState } from '@/api/watchlist'
+import {
+  watchlistApi,
+  type PriceAlert,
+  type PositionChangeEntry,
+  type WatchlistEntry,
+  type WatchlistJobState,
+} from '@/api/watchlist'
+import { automationApi } from '@/api/automation'
+import { useAuthStore } from '@/stores/auth'
 import { getErrorMessage } from '@/utils/errors'
 import { formatSourceList } from '@/utils/market'
-import { formatDateTime, ratingTone } from '@/utils/report'
+import { formatDateTime, ratingChangeBadge, ratingTone } from '@/utils/report'
 
 const props = defineProps<{
   item: WatchlistEntry
@@ -24,6 +32,25 @@ const saveError = ref('')
 const noteInput = ref('')
 const costInput = ref('')
 const quantityInput = ref('')
+
+// 调仓记录：展开时按需加载
+const historyOpen = ref(false)
+const history = ref<PositionChangeEntry[] | null>(null)
+const historyLoading = ref(false)
+const historyError = ref('')
+
+// 价位提醒：展开时按需加载
+const alertPanelOpen = ref(false)
+const alerts = ref<PriceAlert[] | null>(null)
+const alertsLoading = ref(false)
+const alertError = ref('')
+const alertDirection = ref<'above' | 'below'>('above')
+const alertPriceInput = ref('')
+const alertSaving = ref(false)
+// 统一通知设置：打开提醒面板时按需加载实际收件地址
+const notifyTarget = ref<string | null>(null)
+const notifyLoaded = ref(false)
+const auth = useAuthStore()
 
 const metaParts = computed(() => {
   const parts: string[] = []
@@ -89,6 +116,126 @@ function formatPct(value: number | null): string {
   return `${value > 0 ? '+' : ''}${value.toFixed(2)}%`
 }
 
+const latestChange = computed(() =>
+  ratingChangeBadge(props.item.latest?.rating_change, props.item.latest?.prev_rating),
+)
+
+function directionLabel(direction: string): string {
+  return direction === 'above' ? '涨到' : '跌破'
+}
+
+const symbolAlerts = computed(() =>
+  (alerts.value ?? []).filter((alert) => alert.symbol === props.item.symbol),
+)
+const activeAlerts = computed(() => symbolAlerts.value.filter((alert) => alert.status === 'active'))
+const triggeredAlerts = computed(() =>
+  symbolAlerts.value.filter((alert) => alert.status === 'triggered'),
+)
+
+async function loadAlerts(force = false): Promise<void> {
+  if (alerts.value !== null && !force) return
+  alertsLoading.value = true
+  alertError.value = ''
+  try {
+    const { data } = await watchlistApi.alerts()
+    alerts.value = data
+  } catch (err) {
+    alertError.value = getErrorMessage(err, '提醒加载失败')
+  } finally {
+    alertsLoading.value = false
+  }
+}
+
+async function toggleAlertPanel(): Promise<void> {
+  alertPanelOpen.value = !alertPanelOpen.value
+  if (alertPanelOpen.value) {
+    await Promise.all([loadAlerts(), loadNotifyTarget()])
+  }
+}
+
+async function loadNotifyTarget(): Promise<void> {
+  if (notifyLoaded.value) return
+  try {
+    const { data } = await automationApi.getSettings()
+    notifyTarget.value = data.price_alert_email_enabled
+      ? data.notify_email || auth.user?.email || null
+      : null
+  } catch {
+    // 设置加载失败时不在卡片上展示收件地址提示
+    notifyTarget.value = null
+  } finally {
+    notifyLoaded.value = true
+  }
+}
+
+async function refreshAlerts(): Promise<void> {
+  try {
+    const { data } = await watchlistApi.alerts()
+    alerts.value = data
+  } catch {
+    // 刷新失败保留旧数据
+  }
+}
+
+async function saveAlert(): Promise<void> {
+  if (alertSaving.value) return
+  const price = Number(String(alertPriceInput.value).trim())
+  if (!Number.isFinite(price) || price <= 0) {
+    alertError.value = '请输入大于 0 的目标价'
+    return
+  }
+  alertSaving.value = true
+  alertError.value = ''
+  try {
+    await watchlistApi.createAlert(props.item.symbol, alertDirection.value, price)
+    alertPriceInput.value = ''
+    await refreshAlerts()
+  } catch (err) {
+    alertError.value = getErrorMessage(err, '提醒创建失败')
+  } finally {
+    alertSaving.value = false
+  }
+}
+
+async function removeAlert(id: string): Promise<void> {
+  try {
+    await watchlistApi.cancelAlert(id)
+    await refreshAlerts()
+  } catch (err) {
+    alertError.value = getErrorMessage(err, '取消失败')
+  }
+}
+
+async function toggleHistory(): Promise<void> {
+  historyOpen.value = !historyOpen.value
+  if (!historyOpen.value || history.value !== null) return
+  historyLoading.value = true
+  historyError.value = ''
+  try {
+    const { data } = await watchlistApi.positionHistory(props.item.symbol)
+    history.value = data
+  } catch (err) {
+    historyError.value = getErrorMessage(err, '调仓记录加载失败')
+  } finally {
+    historyLoading.value = false
+  }
+}
+
+function historyText(entry: PositionChangeEntry): string {
+  const parts: string[] = []
+  if (entry.old_cost_price !== entry.new_cost_price) {
+    parts.push(
+      `成本 ${entry.old_cost_price === null ? '空' : entry.old_cost_price.toFixed(2)} → ${
+        entry.new_cost_price === null ? '空' : entry.new_cost_price.toFixed(2)
+      }`,
+    )
+  }
+  if (entry.old_quantity !== entry.new_quantity) {
+    parts.push(`数量 ${entry.old_quantity ?? '空'} → ${entry.new_quantity ?? '空'}`)
+  }
+  return parts.length ? parts.join(' · ') : '持仓信息更新'
+}
+
 function startEdit(): void {
   noteInput.value = props.item.note
   costInput.value = props.item.cost_price === null ? '' : String(props.item.cost_price)
@@ -132,6 +279,9 @@ async function saveEdit(): Promise<void> {
     await watchlistApi.update(props.item.symbol, payload)
     emit('updated', payload)
     editing.value = false
+    // 成本/数量可能已变化，下次展开调仓记录时重新拉取
+    history.value = null
+    if (historyOpen.value) await toggleHistory()
   } catch (err) {
     saveError.value = getErrorMessage(err, '保存失败')
   } finally {
@@ -209,6 +359,13 @@ async function saveEdit(): Promise<void> {
             {{ item.latest.rating }}
           </span>
           <span
+            v-if="latestChange"
+            class="inline-flex h-6 shrink-0 items-center rounded-md px-2 text-[11px] font-medium"
+            :class="latestChange.tone"
+          >
+            {{ latestChange.label }}
+          </span>
+          <span
             v-if="item.latest.position_action"
             class="inline-flex h-6 shrink-0 items-center rounded-md px-2 text-[11px] font-medium"
             :class="actionTone"
@@ -257,13 +414,133 @@ async function saveEdit(): Promise<void> {
           </span>
           <p v-if="item.note" class="mt-0.5 truncate text-ink-2">{{ item.note }}</p>
         </div>
-        <button
-          type="button"
-          class="shrink-0 text-[11px] text-ink-3 transition-colors hover:text-ink"
-          @click="editing ? cancelEdit() : startEdit()"
-        >
-          {{ editing ? '收起' : '编辑' }}
-        </button>
+        <div class="flex shrink-0 items-center gap-2">
+          <button
+            type="button"
+            class="flex items-center gap-1 text-[11px] transition-colors"
+            :class="activeAlerts.length ? 'text-ink' : 'text-ink-3 hover:text-ink'"
+            @click="toggleAlertPanel"
+          >
+            <svg
+              class="size-3"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="1.8"
+              aria-hidden="true"
+            >
+              <path
+                d="M18 8a6 6 0 1 0-12 0c0 7-3 8-3 8h18s-3-1-3-8M10.3 21a2 2 0 0 0 3.4 0"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              />
+            </svg>
+            提醒{{ activeAlerts.length ? ` ${activeAlerts.length}` : '' }}
+          </button>
+          <button
+            type="button"
+            class="text-[11px] text-ink-3 transition-colors hover:text-ink"
+            @click="editing ? cancelEdit() : startEdit()"
+          >
+            {{ editing ? '收起' : '编辑' }}
+          </button>
+        </div>
+      </div>
+
+      <div v-if="alertPanelOpen" class="mt-2 space-y-2 rounded-md bg-surface px-2.5 py-2">
+        <div class="flex items-center justify-between gap-2">
+          <span class="text-[11px] font-medium text-ink">价位提醒</span>
+          <span class="text-[10px] text-ink-3">交易时段内检查，触发后通知一次</span>
+        </div>
+        <p v-if="notifyLoaded" class="text-[10px] leading-relaxed text-ink-3">
+          <template v-if="notifyTarget">
+            触发后将发送邮件至 {{ notifyTarget }}（个人中心 → 定时与通知 可改）
+          </template>
+          <template v-else>
+            价位提醒邮件已关闭，触发记录仍会保留；可在个人中心 → 定时与通知 开启
+          </template>
+        </p>
+        <p v-if="alertsLoading" class="text-[11px] text-ink-3">加载中…</p>
+        <template v-else>
+          <div v-if="activeAlerts.length" class="space-y-1">
+            <div
+              v-for="alert in activeAlerts"
+              :key="alert.id"
+              class="flex items-center justify-between gap-2 text-[11px]"
+            >
+              <span class="text-ink-2">
+                {{ directionLabel(alert.direction) }}
+                <span class="tabular-nums">{{ alert.target_price.toFixed(2) }}</span>
+              </span>
+              <button
+                type="button"
+                class="text-ink-3 transition-colors hover:text-danger"
+                @click="removeAlert(alert.id)"
+              >
+                取消
+              </button>
+            </div>
+          </div>
+          <p v-else class="text-[11px] text-ink-3">暂无生效中的提醒</p>
+
+          <div v-if="triggeredAlerts.length" class="space-y-1 border-t border-line pt-1.5">
+            <p class="text-[10px] text-ink-3">已触发（最近 {{ Math.min(triggeredAlerts.length, 5) }} 条）</p>
+            <div
+              v-for="alert in triggeredAlerts.slice(0, 5)"
+              :key="alert.id"
+              class="flex items-center justify-between gap-2 text-[11px] text-ink-2"
+            >
+              <span>
+                {{ directionLabel(alert.direction) }}
+                {{ alert.target_price.toFixed(2) }} · 触发价
+                {{ alert.triggered_price === null ? '—' : alert.triggered_price.toFixed(2) }}
+              </span>
+              <span class="shrink-0 text-ink-3">
+                {{ alert.triggered_at ? formatDateTime(alert.triggered_at) : '' }}
+              </span>
+            </div>
+          </div>
+
+          <div class="flex items-center gap-1.5">
+            <div class="flex overflow-hidden rounded-md border border-line">
+              <button
+                type="button"
+                class="px-2 py-1 text-[11px] transition-colors"
+                :class="alertDirection === 'above' ? 'bg-ink text-canvas' : 'bg-canvas text-ink-2'"
+                @click="alertDirection = 'above'"
+              >
+                涨到
+              </button>
+              <button
+                type="button"
+                class="px-2 py-1 text-[11px] transition-colors"
+                :class="alertDirection === 'below' ? 'bg-ink text-canvas' : 'bg-canvas text-ink-2'"
+                @click="alertDirection = 'below'"
+              >
+                跌破
+              </button>
+            </div>
+            <input
+              v-model="alertPriceInput"
+              type="number"
+              min="0"
+              step="0.01"
+              inputmode="decimal"
+              placeholder="目标价"
+              class="h-7 w-20 rounded-md border border-line bg-canvas px-2 text-[11px] text-ink placeholder:text-ink-3 focus:border-line-strong focus:outline-none"
+              @keyup.enter="saveAlert"
+            />
+            <button
+              type="button"
+              class="ml-auto rounded-md border border-ink bg-ink px-2.5 py-1 text-[11px] text-canvas transition-opacity hover:opacity-80 disabled:opacity-50"
+              :disabled="alertSaving"
+              @click="saveAlert"
+            >
+              {{ alertSaving ? '保存中…' : '添加提醒' }}
+            </button>
+          </div>
+          <p v-if="alertError" class="text-[11px] text-danger">{{ alertError }}</p>
+        </template>
       </div>
 
       <div v-if="editing" class="mt-2 space-y-2">
@@ -312,6 +589,28 @@ async function saveEdit(): Promise<void> {
           </button>
         </div>
         <p v-if="saveError" class="text-[11px] text-danger">{{ saveError }}</p>
+        <div class="border-t border-line pt-2">
+          <button
+            type="button"
+            class="text-[11px] text-ink-3 transition-colors hover:text-ink"
+            @click="toggleHistory"
+          >
+            {{ historyOpen ? '收起调仓记录' : '调仓记录' }}
+          </button>
+          <div v-if="historyOpen" class="mt-1.5 space-y-1">
+            <p v-if="historyLoading" class="text-[11px] text-ink-3">加载中…</p>
+            <p v-else-if="historyError" class="text-[11px] text-danger">{{ historyError }}</p>
+            <p v-else-if="!history?.length" class="text-[11px] text-ink-3">暂无调仓记录</p>
+            <div
+              v-for="entry in history ?? []"
+              :key="entry.id"
+              class="flex items-center justify-between gap-2 text-[11px] text-ink-2"
+            >
+              <span>{{ historyText(entry) }}</span>
+              <span class="shrink-0 text-ink-3">{{ formatDateTime(entry.created_at) }}</span>
+            </div>
+          </div>
+        </div>
       </div>
 
       <div

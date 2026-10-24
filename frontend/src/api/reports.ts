@@ -10,6 +10,8 @@ export interface ReportSummary {
   model: string
   prompt_version: string
   decision_source: string
+  rating_change: string | null
+  prev_rating: string | null
   created_at: string
 }
 

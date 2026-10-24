@@ -55,6 +55,13 @@ function handleClick(event: MouseEvent): void {
     >
       {{ item.rating }}
     </span>
+    <span
+      v-if="item.rating_change === 'up' || item.rating_change === 'down'"
+      class="inline-flex h-7 shrink-0 items-center rounded-md px-2 text-[11px] font-medium"
+      :class="item.rating_change === 'up' ? 'bg-up-soft text-up' : 'bg-down-soft text-down'"
+    >
+      {{ item.rating_change === 'up' ? '上调' : '下调' }}
+    </span>
 
     <div class="min-w-0 flex-1">
       <div class="flex flex-wrap items-center gap-x-2 gap-y-0.5">

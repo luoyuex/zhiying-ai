@@ -88,9 +88,9 @@ const viewMeta = computed(() => {
   }
   if (activeView.value === 'automation') {
     return {
-      eyebrow: 'AUTOMATION',
-      title: '定时任务',
-      desc: '每日自动选股与自动分析自选股',
+      eyebrow: 'AUTOMATION & NOTIFY',
+      title: '定时与通知',
+      desc: '每日自动任务与邮件通知设置',
     }
   }
   return {
@@ -357,7 +357,7 @@ onBeforeUnmount(() => {
               <circle cx="12" cy="12" r="8.5" />
               <path d="M12 7.5V12l3 2" stroke-linecap="round" />
             </svg>
-            定时任务
+            定时与通知
           </button>
           <div class="mt-6 text-[10px] font-medium tracking-wide text-ink-3">安全</div>
           <button
@@ -470,7 +470,7 @@ onBeforeUnmount(() => {
               "
               @click="setView('automation')"
             >
-              定时任务
+              定时与通知
             </button>
             <button
               type="button"
