@@ -14,12 +14,23 @@ const loading = ref(true)
 const error = ref('')
 
 const rangeLabel = computed(() => (range.value === 'today' ? '今日' : '近 7 日'))
-const costText = computed(() =>
-  data.value ? `¥${data.value.cost_estimate.toFixed(2)}` : '—',
-)
-const tokenText = computed(() =>
-  data.value ? data.value.tokens_total.toLocaleString('zh-CN') : '—',
-)
+const costText = computed(() => {
+  if (!data.value) return '—'
+  if (data.value.unpriced_calls > 0 && data.value.cost_estimate === 0) {
+    return '—'
+  }
+  return `¥${data.value.cost_estimate.toFixed(2)}`
+})
+const costHint = computed(() => {
+  if (!data.value) return ''
+  const parts = [`${data.value.tokens_total.toLocaleString('zh-CN')} tokens`]
+  if (data.value.unpriced_calls > 0) {
+    parts.push(
+      data.value.cost_estimate > 0 ? '部分调用未配置单价' : '当前模型未配置单价',
+    )
+  }
+  return parts.join(' · ')
+})
 const successText = computed(() =>
   data.value?.success_rate == null ? '—' : `${data.value.success_rate}%`,
 )
@@ -116,11 +127,7 @@ onMounted(() => {
           :value="data.jobs_total"
           :hint="`成功 ${data.jobs_succeeded} · 失败 ${data.jobs_failed} · 成功率 ${successText}`"
         />
-        <StatCard
-          label="估算成本"
-          :value="costText"
-          :hint="`${tokenText} tokens · 未配置单价的模型不计入`"
-        />
+        <StatCard label="估算成本" :value="costText" :hint="costHint" />
       </section>
 
       <section class="mt-6 grid gap-4 lg:grid-cols-2">

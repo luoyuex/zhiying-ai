@@ -196,6 +196,16 @@ async def build_overview(
         )
     ).one()
 
+    unpriced_calls = await db.scalar(
+        select(func.count())
+        .select_from(LLMCall)
+        .where(
+            LLMCall.created_at >= since,
+            LLMCall.cost.is_(None),
+            (LLMCall.prompt_tokens + LLMCall.completion_tokens) > 0,
+        )
+    )
+
     data_since = await db.scalar(select(func.min(LLMCall.created_at)))
     if data_since is None:
         data_since = await db.scalar(select(func.min(AIJob.created_at)))
@@ -240,6 +250,7 @@ async def build_overview(
         ),
         tokens_total=int(token_sum or 0),
         cost_estimate=float(cost_sum or 0),
+        unpriced_calls=int(unpriced_calls or 0),
         worker_alive=worker_alive,
         queue_depth=queue_depth,
         running_jobs=int(running_jobs or 0),

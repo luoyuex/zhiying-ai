@@ -109,6 +109,9 @@ class Settings(BaseSettings):
     # 注意：推理型模型（如 sensenova-6.8）的思考过程也消耗 completion token，
     # 2048 在长上下文分析师 prompt 下仍会被思考吃光导致正文为空，因此放宽到 8192。
     llm_max_tokens: int = 8192
+    # 可选：当前模型每百万 token 单价（人民币）；INPUT/OUTPUT 都填才启用成本估算
+    llm_price_input_per_m: str = ""
+    llm_price_output_per_m: str = ""
     # 推理力度：default/none/low/medium/high。default 表示不显式传参；
     # SenseNova 系列思考会占满正文额度，default 时自动按 none 处理。
     llm_reasoning_effort: Literal[
