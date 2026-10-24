@@ -254,7 +254,7 @@ async function save(): Promise<void> {
           <span>
             <span class="block text-[13px] font-medium text-ink">邮件通知</span>
             <span class="mt-0.5 block text-[11px] text-ink-3">
-              定时任务跑完后，把结果汇总成一封邮件发到指定邮箱
+              可选；开启后把定时任务结果汇总发到指定邮箱，不开启不影响任务执行
             </span>
           </span>
           <input v-model="emailNotifyEnabled" type="checkbox" class="peer sr-only" />

@@ -228,6 +228,32 @@ async def test_digest_combines_screener_and_analysis(monkeypatch):
         await cleanup_user(user)
 
 
+async def test_digest_skips_users_without_email_notification(monkeypatch):
+    """未开启邮件通知时定时任务照常执行，只是不发邮件。"""
+    user = await make_user_with_settings(
+        analysis_enabled=True,
+        email_notify_enabled=False,
+        notify_email=None,
+    )
+    sent: list[dict] = []
+
+    async def fake_send_email(**kwargs) -> None:
+        sent.append(kwargs)
+
+    monkeypatch.setattr(automation_mail_service, "send_email", fake_send_email)
+    redis = FakeRedis()
+
+    try:
+        await add_analysis_job(user)
+        assert await automation_mail_service.send_due_digests(
+            redis, now=datetime.now(TZ)
+        ) == 0
+        assert sent == []
+        assert not any(key.startswith("automation:mail:") for key in redis.store)
+    finally:
+        await cleanup_user(user)
+
+
 async def test_digest_waits_for_scheduled_time(monkeypatch):
     now = datetime.now(TZ)
     if now.hour >= 23:

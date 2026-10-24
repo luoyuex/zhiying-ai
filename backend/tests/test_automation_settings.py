@@ -72,6 +72,21 @@ async def test_settings_default_and_roundtrip():
             response = await client.get("/api/v1/automation/settings")
             assert response.status_code == 200, response.text
             assert response.json()["strategy_settings"]["main_force"]["enabled"] is True
+
+            # 关闭邮件通知、地址留空也可正常保存（不配置邮箱不影响定时任务）
+            response = await client.put(
+                "/api/v1/automation/settings",
+                json={
+                    "screener_enabled": True,
+                    "analysis_enabled": True,
+                    "email_notify_enabled": False,
+                    "notify_email": "",
+                    "strategy_settings": {},
+                },
+            )
+            assert response.status_code == 200, response.text
+            assert response.json()["email_notify_enabled"] is False
+            assert response.json()["notify_email"] is None
     finally:
         app.dependency_overrides.clear()
         async with SessionLocal() as session:
