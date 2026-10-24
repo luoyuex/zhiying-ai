@@ -1323,22 +1323,22 @@ onBeforeUnmount(() => {
           <KlineChart
             v-if="kline && kline.bars.length"
             :bars="kline.bars"
-            class="h-[320px] sm:h-[460px]"
+            class="h-[400px] sm:h-[460px]"
             :class="loadingKline ? 'opacity-60' : ''"
           />
           <div
             v-else-if="loadingKline"
-            class="h-[320px] animate-pulse rounded-md bg-surface sm:h-[430px]"
+            class="h-[400px] animate-pulse rounded-md bg-surface sm:h-[460px]"
           />
           <div
             v-else-if="chartError"
-            class="flex h-[320px] items-center justify-center rounded-md border border-line bg-surface px-4 text-center text-xs text-ink-3 sm:h-[430px]"
+            class="flex h-[400px] items-center justify-center rounded-md border border-line bg-surface px-4 text-center text-xs text-ink-3 sm:h-[460px]"
           >
             {{ chartError }}
           </div>
           <div
             v-else
-            class="flex h-[320px] items-center justify-center rounded-md border border-dashed border-line bg-surface text-xs text-ink-3 sm:h-[430px]"
+            class="flex h-[400px] items-center justify-center rounded-md border border-dashed border-line bg-surface text-xs text-ink-3 sm:h-[460px]"
           >
             暂无 K 线数据
           </div>
