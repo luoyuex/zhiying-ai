@@ -31,6 +31,25 @@ const enabledStrategies = ref<AutomationStrategyId[]>([])
 const formValues = ref<Record<string, Record<string, number | boolean | string | null>>>({})
 const emailNotifyEnabled = ref(false)
 const notifyEmail = ref('')
+const expandedStrategies = ref<AutomationStrategyId[]>([])
+
+function isStrategyExpanded(id: AutomationStrategyId): boolean {
+  return expandedStrategies.value.includes(id)
+}
+
+function toggleStrategyExpanded(id: AutomationStrategyId): void {
+  expandedStrategies.value = isStrategyExpanded(id)
+    ? expandedStrategies.value.filter((item) => item !== id)
+    : [...expandedStrategies.value, id]
+}
+
+function onStrategyEnabledChange(id: AutomationStrategyId, event: Event): void {
+  if ((event.target as HTMLInputElement).checked) {
+    if (!isStrategyExpanded(id)) expandedStrategies.value.push(id)
+  } else {
+    expandedStrategies.value = expandedStrategies.value.filter((item) => item !== id)
+  }
+}
 
 function specById(id: AutomationStrategyId): StrategyFormSpec {
   return STRATEGY_FORM_SPECS.find((item) => item.id === id) as StrategyFormSpec
@@ -61,6 +80,7 @@ function applySettings(data: AutomationSettings): void {
     values[spec.id] = mergeFilters(spec, data.strategy_settings?.[spec.id]?.filters)
   }
   formValues.value = values
+  expandedStrategies.value = []
   emailNotifyEnabled.value = data.email_notify_enabled
   notifyEmail.value = data.notify_email || auth.user?.email || ''
 }
@@ -160,22 +180,45 @@ async function save(): Promise<void> {
             :key="spec.id"
             class="rounded-md bg-canvas"
           >
-            <label class="flex cursor-pointer items-center justify-between gap-3 px-3 py-2.5">
-              <span class="min-w-0">
-                <span class="block text-xs font-medium text-ink">{{ spec.name }}</span>
-                <span class="mt-0.5 block truncate text-[11px] text-ink-3">
-                  {{ spec.description }}
+            <div class="flex items-center justify-between gap-3 px-3 py-2.5">
+              <label class="flex min-w-0 flex-1 cursor-pointer items-center gap-2.5">
+                <input
+                  v-model="enabledStrategies"
+                  type="checkbox"
+                  :value="spec.id"
+                  class="size-4 shrink-0 accent-[var(--color-ink)]"
+                  @change="onStrategyEnabledChange(spec.id, $event)"
+                />
+                <span class="min-w-0">
+                  <span class="block text-xs font-medium text-ink">{{ spec.name }}</span>
+                  <span class="mt-0.5 block truncate text-[11px] text-ink-3">
+                    {{ spec.description }}
+                  </span>
                 </span>
-              </span>
-              <input
-                v-model="enabledStrategies"
-                type="checkbox"
-                :value="spec.id"
-                class="size-4 shrink-0 accent-[var(--color-ink)]"
-              />
-            </label>
+              </label>
+              <button
+                v-if="enabledStrategies.includes(spec.id)"
+                type="button"
+                class="flex shrink-0 items-center gap-1 text-[11px] text-ink-3 transition-colors hover:text-ink"
+                :aria-expanded="isStrategyExpanded(spec.id)"
+                @click="toggleStrategyExpanded(spec.id)"
+              >
+                {{ isStrategyExpanded(spec.id) ? '收起' : '设置' }}
+                <svg
+                  class="size-3.5 transition-transform duration-150"
+                  :class="isStrategyExpanded(spec.id) ? 'rotate-180' : ''"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="1.8"
+                  aria-hidden="true"
+                >
+                  <path d="m6 9 6 6 6-6" stroke-linecap="round" stroke-linejoin="round" />
+                </svg>
+              </button>
+            </div>
             <div
-              v-if="enabledStrategies.includes(spec.id)"
+              v-if="enabledStrategies.includes(spec.id) && isStrategyExpanded(spec.id)"
               class="grid gap-x-6 gap-y-3 border-t border-line px-3 py-3 sm:grid-cols-2"
             >
               <label
