@@ -2,11 +2,12 @@
 
 A 股 AI 分析工作台。前端 Vue 3 + TypeScript，后端 FastAPI + PostgreSQL + Redis。
 
-当前进度：**P1 项目骨架 + 邮箱验证码认证**（完成）；**P2 行情数据层**（报价 + K 线 + 缓存/限流/熔断已通，财务/资金流/情绪已补，新闻/搜索待做）；**P3 进行中**（行情速查 + 个股详情页 v1 已上线，搜索/自选/klinecharts 指标待做）；**P4 六分析师 + 首席决策** 已上线；**P5 历史报告** 已落库（PDF/并排对比待做）。
+当前进度：用户侧核心功能已上线（邮箱认证、个股 AI 分析、自选/组合诊断、五策略选股、定时任务、历史报告/对比/PDF）；**后台管理 P0 已上线**（运营总览、用户与额度、审计、LLM 调用与任务台账），P1–P4 见 [开发计划](docs/DEVELOPMENT_PLAN.md)。
 
 **当前可用功能**
 
 - 邮箱验证码注册、密码/验证码登录、重置密码
+- **管理后台** `/app/admin`（仅管理员）：运营总览、用户搜索/额度/封禁/强制下线、操作审计；LLM 调用与 AI 任务开始落库（成本日报/任务中心在 P1）
 - 工作台「个股查询」：输入 6 位代码或点快捷标的，**直接进入个股详情页**；工作台不再预加载行情，避免重复查询
 - 个股详情页 `/stock/:symbol`：统一加载报价、12 项指标、日/周/月 K、前复权/后复权/不复权；支持页面内切换代码
 - **技术面诊断**：基于 90 根日 K 前复权计算评分/评级、趋势、MA/MACD/RSI/BOLL/ATR/量比信号、支撑压力，以及由代码计算的三档价位
@@ -133,12 +134,19 @@ LLM_TIMEOUT_SECONDS=180
 LLM_ANALYST_TIMEOUT_SECONDS=150
 LLM_ANALYST_CONCURRENCY=3
 LLM_JOB_TIMEOUT_SECONDS=600
-LLM_MAX_TOKENS=4096
+LLM_MAX_TOKENS=8192
+# 推理力度：default/none/low/medium/high；default 不传参，SenseNova 自动按 none
+LLM_REASONING_EFFORT=default
+LLM_FINAL_REASONING_EFFORT=default
+LLM_ANALYST_MAX_TOKENS=8000
+LLM_FINAL_MAX_TOKENS=16000
 LLM_TEMPERATURE=0.3
 LLM_CACHE_SECONDS=21600
 ```
 
-> `LLM_TIMEOUT_SECONDS` 是单次调用超时；`LLM_ANALYST_TIMEOUT_SECONDS` 是每位分析师的超时；`LLM_JOB_TIMEOUT_SECONDS` 是整个后台任务超时。六位分析师按 `LLM_ANALYST_CONCURRENCY` 并发，免费/低配模型建议保持 3。推理型模型思考也消耗 token，`LLM_MAX_TOKENS` 不要低于 4096。
+> `LLM_TIMEOUT_SECONDS` 是单次调用超时；`LLM_ANALYST_TIMEOUT_SECONDS` 是每位分析师的超时；`LLM_JOB_TIMEOUT_SECONDS` 是整个后台任务超时。六位分析师按 `LLM_ANALYST_CONCURRENCY` 并发，免费/低配模型建议保持 3。
+>
+> 推理型模型（如 `sensenova-6.8-flash-lite`）的思考过程也计入 completion token。若日志出现 `finish_reason=length` / `LLM 思考过程耗尽 token`：`LLM_REASONING_EFFORT=default` 时代码会对 SenseNova 自动使用 `none`；其他推理模型可显式设 `none`/`low`。`max_tokens` 不能真正“无限”，上限由模型最大输出与上下文决定；`LLM_ANALYST_MAX_TOKENS` / `LLM_FINAL_MAX_TOKENS` 是选股专用上限。
 >
 > 开发期不想被额度挡住：在 `.env` 设 `AI_DAILY_QUOTA_OVERRIDE=9999`，所有用户统一按该额度计算；设为 `0` 则恢复使用用户表的 `daily_analysis_quota`。改完需重启后端。
 
@@ -320,6 +328,26 @@ AI 配置状态（前缀 `/api/v1/ai`，需登录）：
 | GET | `?symbol=600519&limit=6` | 当前用户某只股票的历史报告列表（个股页使用） |
 | GET | `/{report_id}` | 回看完整六分析师报告与最终决策 |
 
+后台管理（前缀 `/api/v1/admin`，仅 `role=admin`）：
+
+| 方法 | 路径 | 说明 |
+| --- | --- | --- |
+| GET | `/overview?range=today\|7d` | 运营总览：用户、任务、成本、Worker/队列/熔断/代理 |
+| GET | `/users` | 用户列表，支持搜索/状态/角色/额度/分页 |
+| GET/PATCH | `/users/{id}` | 用户详情；调整每日额度或状态（写操作审计） |
+| POST | `/users/{id}/reset-quota` | 重置今日已用额度 |
+| POST | `/users/{id}/revoke-sessions` | 强制下线 |
+| GET | `/users/{id}/sessions` | 登录会话 |
+| GET | `/audit-logs` | 管理员操作审计 |
+
+管理员初始化（在 `backend` 目录）：
+
+```bash
+uv run python -m app.scripts.create_admin --email you@example.com --promote
+# 取消管理员（不能移除最后一个 active 管理员）
+uv run python -m app.scripts.create_admin --email you@example.com --demote
+```
+
 数据约定：价格=元、成交量=股、成交额=元；返回 `source` / `fetched_at` / `delayed`。缓存过期但上游全挂时返回 stale 数据并置 `delayed=true`。
 
 ---
@@ -333,15 +361,16 @@ uv run pytest -q
 
 测试会真实写入 PostgreSQL 与 Redis（使用 `test-xxxx@example.com` 临时账号，结束后自动清理），运行前请先 `npm run up` 并执行迁移。
 
-当前覆盖 70 个用例（含参数化）：认证链路、行情 Provider/缓存/API、技术诊断、LLM/六分析师/异步任务、元宝搜索（官方 TC3 + Bearer）与历史报告。
+当前覆盖 217 个用例（截至 2026-10-24）：认证链路、行情 Provider/缓存/API、技术诊断、LLM/六分析师/异步任务、元宝搜索（官方 TC3 + Bearer）、历史报告、后台权限/分页/写操作审计与任务台账。
 
 ---
 
 ## 下一步
 
-1. P4：六位分析师逐位接 LLM（当前为规则+数据），再上 ARQ/SSE 流式
-2. P3：股票名称/拼音搜索 + 自选股 + klinecharts 指标（MA/MACD/BOLL）
-3. P5：历史报告并排对比 + PDF 导出；P2 收尾新闻/公告结构化 Provider
+1. 后台 P1：LLM 成本日报、任务中心（实时态/重跑）、定时任务执行记录
+2. 后台 P2：跨用户内容库（报告/选股/组合诊断/自选）
+3. 后台 P3：数据源/代理/熔断/缓存、配置快照、日志查看
+4. 后台 P4：公告/反馈
 
 ---
 

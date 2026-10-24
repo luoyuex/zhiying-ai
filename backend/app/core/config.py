@@ -103,8 +103,20 @@ class Settings(BaseSettings):
     llm_job_ttl_seconds: int = 3600
     llm_active_job_ttl_seconds: int = 900
     # 注意：推理型模型（如 sensenova-6.8）的思考过程也消耗 completion token，
-    # 2048 在长上下文分析师 prompt 下仍会被思考吃光导致正文为空，因此放宽到 4096
-    llm_max_tokens: int = 4096
+    # 2048 在长上下文分析师 prompt 下仍会被思考吃光导致正文为空，因此放宽到 8192。
+    llm_max_tokens: int = 8192
+    # 推理力度：default/none/low/medium/high。default 表示不显式传参；
+    # SenseNova 系列思考会占满正文额度，default 时自动按 none 处理。
+    llm_reasoning_effort: Literal[
+        "default", "none", "low", "medium", "high"
+    ] = "default"
+    # 选股最终精选的推理力度；default 时沿用上面的自动策略（SenseNova -> none）
+    llm_final_reasoning_effort: Literal[
+        "default", "none", "low", "medium", "high"
+    ] = "default"
+    # 选股分析师与最终精选的输出上限（模型最大输出通常为 64K，按需调整）
+    llm_analyst_max_tokens: int = 8000
+    llm_final_max_tokens: int = 16000
     llm_temperature: float = 0.3
     llm_cache_seconds: int = 21600
 

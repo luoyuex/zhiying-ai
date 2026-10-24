@@ -188,6 +188,31 @@ watch(
                 </button>
 
                 <RouterLink
+                  v-if="auth.user?.role === 'admin'"
+                  to="/admin"
+                  role="menuitem"
+                  class="flex items-center gap-2.5 rounded-md px-2.5 py-2 text-[13px] text-ink-2 transition-colors hover:bg-surface hover:text-ink"
+                  @click="closeMenu"
+                >
+                  <svg
+                    class="size-4 shrink-0"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="1.7"
+                    aria-hidden="true"
+                  >
+                    <path
+                      d="M12 3.5 19 6v5.5c0 4.2-2.8 7.5-7 9-4.2-1.5-7-4.8-7-9V6l7-2.5Z"
+                      stroke-linejoin="round"
+                    />
+                    <path d="m9.5 12 1.8 1.8L15 10" stroke-linecap="round" stroke-linejoin="round" />
+                  </svg>
+                  <span class="flex-1">管理后台</span>
+                  <span class="text-[11px] text-ink-3">→</span>
+                </RouterLink>
+
+                <RouterLink
                   to="/"
                   role="menuitem"
                   class="flex items-center gap-2.5 rounded-md px-2.5 py-2 text-[13px] text-ink-2 transition-colors hover:bg-surface hover:text-ink"

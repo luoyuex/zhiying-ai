@@ -64,8 +64,8 @@ TZ_SHANGHAI = ZoneInfo("Asia/Shanghai")
 MAX_ANALYSIS_CANDIDATES = 40
 # 主力追踪对齐参考项目：候选池取区间净流入前 100
 MAIN_FORCE_CANDIDATES = 100
-ANALYST_MAX_TOKENS = 6000
-FINAL_MAX_TOKENS = 6000
+ANALYST_MAX_TOKENS = settings.llm_analyst_max_tokens
+FINAL_MAX_TOKENS = settings.llm_final_max_tokens
 ANALYST_CALL_TIMEOUT = float(settings.llm_analyst_timeout_seconds)
 FINAL_CALL_TIMEOUT = float(settings.llm_timeout_seconds)
 
@@ -247,6 +247,8 @@ async def _generate_final(
                 prompt,
                 max_tokens=FINAL_MAX_TOKENS,
                 timeout=FINAL_CALL_TIMEOUT,
+                # 结构化 JSON 默认关闭/压低思考，避免 reasoning 吃光正文额度
+                reasoning_effort=settings.llm_final_reasoning_effort,
             )
         except (LLMRequestError, LLMResponseError) as exc:
             if attempt == 2:

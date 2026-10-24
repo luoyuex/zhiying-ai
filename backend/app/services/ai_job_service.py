@@ -16,6 +16,7 @@ from redis.asyncio import Redis
 
 from app.core.config import settings
 from app.core.logging import get_logger
+from app.core.telemetry import bind_context
 from app.llm.client import (
     LLMError,
     LLMNotConfiguredError,
@@ -24,6 +25,7 @@ from app.llm.client import (
     LLMResponseError,
     is_llm_configured,
 )
+from app.llm.prompts import PROMPT_VERSION
 from app.providers.base import DataNotFound, MarketUnavailable
 from app.providers.financial import get_financial_data
 from app.providers.fundflow import get_fund_flow
@@ -36,6 +38,12 @@ from app.services.ai_analysis_service import (
     cache_ai_report,
     generate_ai_analysis,
     get_cached_ai_report,
+)
+from app.services.job_ledger import (
+    record_job_created,
+    record_job_failed,
+    record_job_running,
+    record_job_succeeded,
 )
 from app.services.market_service import MarketDataService
 from app.services.position_service import load_user_position
@@ -186,6 +194,12 @@ async def get_ai_job(redis: Redis, user_id: object, job_id: str) -> AIJobState:
                 }
             )
             state = await _save_state(redis, job_id, user_id, state)
+            await record_job_failed(
+                job_id,
+                error_code="AI_JOB_STALE",
+                error_message="分析任务已中断（服务可能重启），请重新发起",
+                phase="已中断",
+            )
 
     return _with_elapsed(state)
 
@@ -196,6 +210,8 @@ async def start_ai_job(
     daily_quota: int,
     symbol: str,
     force: bool = False,
+    *,
+    trigger: str = "manual",
 ) -> AIJobState:
     if not is_llm_configured():
         raise LLMNotConfiguredError("尚未配置 LLM")
@@ -232,6 +248,14 @@ async def start_ai_job(
         updated_at=now,
     )
     await _save_state(redis, job_id, user_id, state)
+    await record_job_created(
+        job_id=job_id,
+        kind="analysis",
+        user_id=user_id,
+        symbol=symbol,
+        trigger=trigger,
+        meta={"force": force},
+    )
     logger.info("AI 任务创建 job_id=%s symbol=%s force=%s", job_id, symbol, force)
     await redis.set(
         _active_key(user_id, symbol),
@@ -255,6 +279,11 @@ async def start_ai_job(
             logger.exception("AI 任务入队失败 job_id=%s: %s", job_id, exc)
             await redis.delete(_job_key(job_id))
             await redis.delete(_active_key(user_id, symbol))
+            await record_job_failed(
+                job_id,
+                error_code="AI_WORKER_UNAVAILABLE",
+                error_message="分析队列暂时不可用，请稍后重试",
+            )
             raise AIWorkerUnavailableError("分析队列暂时不可用，请稍后重试") from exc
         return state
 
@@ -318,6 +347,7 @@ async def _run_job(
             status=AIJobStatus.RUNNING,
             phase="准备行情数据",
         )
+        await record_job_running(job_id, "准备行情数据")
         market = MarketDataService(redis)
         quote = await market.get_quote(symbol)
         kline = await market.get_kline(
@@ -345,6 +375,7 @@ async def _run_job(
                 error_code=None,
                 error_message=None,
             )
+            await record_job_succeeded(job_id, phase="命中 6h 缓存")
             logger.info("AI job 命中缓存 job_id=%s symbol=%s", job_id, symbol)
             return
 
@@ -388,22 +419,29 @@ async def _run_job(
             phase="六位分析师分析中 0/6",
         )
         async with asyncio.timeout(settings.llm_job_timeout_seconds):
-            result = await generate_ai_analysis(
-                redis,
-                user_id,
-                daily_quota,
-                quote,
-                technical,
-                kline.bars,
-                financial=financial,
-                fund_flow=fund_flow,
-                sentiment=sentiment,
-                web=web,
-                progress=report_progress,
-                force=force,
-                position=position,
-            )
+            with bind_context(
+                user_id=user_id,
+                job_id=job_id,
+                task="stock_analysis",
+                prompt_version=PROMPT_VERSION,
+            ):
+                result = await generate_ai_analysis(
+                    redis,
+                    user_id,
+                    daily_quota,
+                    quote,
+                    technical,
+                    kline.bars,
+                    financial=financial,
+                    fund_flow=fund_flow,
+                    sentiment=sentiment,
+                    web=web,
+                    progress=report_progress,
+                    force=force,
+                    position=position,
+                )
 
+        report_id: uuid.UUID | None = None
         try:
             report_id = await save_analysis_report(user_id, result)
             result = result.model_copy(update={"report_id": str(report_id)})
@@ -421,6 +459,7 @@ async def _run_job(
             error_code=None,
             error_message=None,
         )
+        await record_job_succeeded(job_id, phase="完成", report_id=report_id)
         logger.info("AI job 完成 job_id=%s symbol=%s cached=%s", job_id, symbol, result.cached)
     except QuotaExceededError as exc:
         await _fail(redis, job_id, user_id, "ANALYSIS_QUOTA_EXCEEDED", str(exc))
@@ -431,7 +470,16 @@ async def _run_job(
     except LLMRateLimitedError as exc:
         await _fail(redis, job_id, user_id, "LLM_BUSY", str(exc))
     except LLMResponseError as exc:
-        await _fail(redis, job_id, user_id, "LLM_INVALID_RESPONSE", str(exc))
+        if "思考过程耗尽" in str(exc):
+            await _fail(
+                redis,
+                job_id,
+                user_id,
+                "LLM_OUTPUT_TRUNCATED",
+                "AI 思考过程过长，未能生成结果，请重试",
+            )
+        else:
+            await _fail(redis, job_id, user_id, "LLM_INVALID_RESPONSE", str(exc))
     except LLMRequestError as exc:
         await _fail(redis, job_id, user_id, "LLM_ERROR", str(exc))
     except LLMError as exc:
@@ -482,3 +530,4 @@ async def _fail(
         error_code=code,
         error_message=message,
     )
+    await record_job_failed(job_id, error_code=code, error_message=message)

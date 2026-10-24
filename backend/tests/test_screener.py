@@ -615,6 +615,7 @@ class FakeAnalysisLLM:
         user: str,
         max_tokens: int | None = None,
         timeout: float | None = None,
+        reasoning_effort: str | None = None,
     ):
         self.text_calls.append((system, user))
         return f"分析报告 {len(self.text_calls)}"
@@ -625,6 +626,7 @@ class FakeAnalysisLLM:
         user: str,
         max_tokens: int | None = None,
         timeout: float | None = None,
+        reasoning_effort: str | None = None,
     ) -> dict:
         self.json_calls.append((system, user))
         return self.final_payload

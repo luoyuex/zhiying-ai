@@ -14,6 +14,7 @@ from redis.asyncio import Redis
 
 from app.core.config import settings
 from app.core.logging import get_logger
+from app.core.telemetry import bind_context
 from app.llm.client import (
     LLMNotConfiguredError,
     LLMRateLimitedError,
@@ -41,6 +42,12 @@ from app.services.ai_job_service import (
     AIWorkerUnavailableError,
     get_arq_pool,
     worker_alive,
+)
+from app.services.job_ledger import (
+    record_job_created,
+    record_job_failed,
+    record_job_running,
+    record_job_succeeded,
 )
 from app.services.main_force_analysis_service import (
     MainForceEmptyError,
@@ -164,6 +171,12 @@ async def get_screener_job(
                 }
             )
             state = await _save_state(redis, user_id, state)
+            await record_job_failed(
+                job_id,
+                error_code="SCREENER_JOB_STALE",
+                error_message="选股任务已中断（服务可能重启），请重新发起",
+                phase="已中断",
+            )
     return _with_elapsed(state)
 
 
@@ -191,6 +204,8 @@ async def start_screener_job(
     | SmallCapAnalysisRequest
     | ProfitGrowthAnalysisRequest
     | ValueStockAnalysisRequest,
+    *,
+    trigger: str = "manual",
 ) -> ScreenerJobState:
     if not is_llm_configured():
         raise LLMNotConfiguredError("尚未配置 LLM")
@@ -222,8 +237,16 @@ async def start_screener_job(
         updated_at=now,
     )
     await _save_state(redis, user_id, state)
-    await redis.set(_active_key(user_id, strategy), job_id, ex=JOB_TTL_SECONDS)
     filters = payload.model_dump(mode="json")
+    await record_job_created(
+        job_id=job_id,
+        kind="screener",
+        user_id=user_id,
+        strategy=strategy,
+        trigger=trigger,
+        meta={"filters": filters},
+    )
+    await redis.set(_active_key(user_id, strategy), job_id, ex=JOB_TTL_SECONDS)
 
     if settings.ai_job_execution == "arq":
         try:
@@ -241,6 +264,11 @@ async def start_screener_job(
             logger.exception("选股任务入队失败 job_id=%s: %s", job_id, exc)
             await redis.delete(_job_key(job_id))
             await redis.delete(_active_key(user_id, strategy))
+            await record_job_failed(
+                job_id,
+                error_code="AI_WORKER_UNAVAILABLE",
+                error_message="选股队列暂时不可用，请稍后重试",
+            )
             raise AIWorkerUnavailableError("选股队列暂时不可用，请稍后重试") from exc
         return state
 
@@ -269,7 +297,8 @@ async def run_screener_job_task(
     filters: dict,
 ) -> None:
     """ARQ worker 入口，也用于 inline 模式。"""
-    await _run_job(redis, job_id, user_id, daily_quota, strategy, filters)
+    with bind_context(user_id=user_id, job_id=job_id, task="screener"):
+        await _run_job(redis, job_id, user_id, daily_quota, strategy, filters)
 
 
 async def _fail(
@@ -288,6 +317,7 @@ async def _fail(
         error_code=code,
         error_message=message,
     )
+    await record_job_failed(job_id, error_code=code, error_message=message)
 
 
 async def _run_job(
@@ -305,6 +335,7 @@ async def _run_job(
         status=AIJobStatus.RUNNING,
         phase="准备中",
     )
+    await record_job_running(job_id, "准备中")
     user_uuid = uuid.UUID(user_id)
 
     async def on_phase(phase: str) -> None:
@@ -374,6 +405,7 @@ async def _run_job(
             phase="已完成",
             record_id=record_id,
         )
+        await record_job_succeeded(job_id, phase="已完成", record_id=record_id)
     except MainForceEmptyError as exc:
         await _fail(redis, job_id, user_id, "SCREENER_EMPTY", str(exc))
     except QuotaExceededError as exc:
@@ -393,13 +425,22 @@ async def _run_job(
         await _fail(redis, job_id, user_id, "LLM_BUSY", "AI 服务繁忙，请稍后重试")
     except LLMResponseError as exc:
         logger.warning("选股任务返回异常 job_id=%s: %s", job_id, exc)
-        await _fail(
-            redis,
-            job_id,
-            user_id,
-            "LLM_INVALID_RESPONSE",
-            "AI 返回结果异常，请稍后重试",
-        )
+        if "思考过程耗尽" in str(exc):
+            await _fail(
+                redis,
+                job_id,
+                user_id,
+                "LLM_OUTPUT_TRUNCATED",
+                "AI 思考过程过长，未能生成结果；请重试或减少候选数量",
+            )
+        else:
+            await _fail(
+                redis,
+                job_id,
+                user_id,
+                "LLM_INVALID_RESPONSE",
+                "AI 返回结果异常，请稍后重试",
+            )
     except LLMRequestError as exc:
         logger.warning("选股任务调用失败 job_id=%s: %s", job_id, exc)
         await _fail(

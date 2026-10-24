@@ -151,10 +151,14 @@ async def test_run_enqueues_screener_and_analysis(patch_llm, monkeypatch):
     screener_calls: list[tuple] = []
     analysis_calls: list[str] = []
 
-    async def fake_start_screener(_redis, _user_id, _quota, strategy, payload):
+    async def fake_start_screener(
+        _redis, _user_id, _quota, strategy, payload, **_kwargs
+    ):
         screener_calls.append((strategy, payload.model_dump(mode="json")))
 
-    async def fake_start_ai(_redis, _user_id, _quota, symbol, force=False):
+    async def fake_start_ai(
+        _redis, _user_id, _quota, symbol, force=False, **_kwargs
+    ):
         assert force is False
         analysis_calls.append(symbol)
 
@@ -220,7 +224,9 @@ async def test_run_single_user_failure_does_not_block_others(patch_llm, monkeypa
     )
     calls: list[str] = []
 
-    async def fake_start_screener(_redis, user_id, _quota, _strategy, _payload):
+    async def fake_start_screener(
+        _redis, user_id, _quota, _strategy, _payload, **_kwargs
+    ):
         if user_id == first.id:
             raise RuntimeError("boom")
         calls.append(str(user_id))

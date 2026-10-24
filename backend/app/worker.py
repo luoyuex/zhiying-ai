@@ -10,6 +10,7 @@ from arq.connections import RedisSettings
 
 from app.core.config import settings
 from app.core.logging import get_logger, setup_logging
+from app.core.telemetry import start_telemetry, stop_telemetry
 from app.db.redis import close_redis
 from app.db.session import engine
 from app.providers.http import close_http_client
@@ -18,6 +19,7 @@ from app.services.ai_job_service import (
     run_ai_job_task,
 )
 from app.services.daily_automation_service import run_daily_automation_task
+from app.services.job_ledger import reconcile_stale_jobs
 from app.services.screener_job_service import run_screener_job_task
 
 logger = get_logger(__name__)
@@ -59,13 +61,22 @@ async def run_daily_automation(ctx: dict) -> None:
     await run_daily_automation_task(ctx["redis"])
 
 
+async def reconcile_jobs(ctx: dict) -> None:
+    """把 worker 崩溃后长期停留的任务标为失败。"""
+    count = await reconcile_stale_jobs(settings.llm_job_timeout_seconds + 120)
+    if count:
+        logger.info("回收中断任务 %s 条", count)
+
+
 async def on_startup(ctx: dict) -> None:
     setup_logging(settings.debug, filename="worker.log")
+    await start_telemetry()
     await worker_heartbeat(ctx)
     logger.info("ARQ worker 已启动 | max_jobs=%s", settings.ai_worker_max_jobs)
 
 
 async def on_shutdown(ctx: dict) -> None:
+    await stop_telemetry()
     await close_http_client()
     await close_redis()
     await engine.dispose()
@@ -73,13 +84,18 @@ async def on_shutdown(ctx: dict) -> None:
 
 
 class WorkerSettings:
-    functions = [run_ai_job, run_screener_job, run_daily_automation]
+    functions = [run_ai_job, run_screener_job, run_daily_automation, reconcile_jobs]
     cron_jobs = [
         cron(worker_heartbeat, second={0, 30}, run_at_startup=True),
         # 每 5 分钟触发一次调度器；用户按各自设置的时间执行（per-user 防重键保证当天只跑一次）
         cron(
             run_daily_automation,
             minute={0, 5, 10, 15, 20, 25, 30, 35, 40, 45, 50, 55},
+            run_at_startup=True,
+        ),
+        cron(
+            reconcile_jobs,
+            minute={2, 7, 12, 17, 22, 27, 32, 37, 42, 47, 52, 57},
             run_at_startup=True,
         ),
     ]

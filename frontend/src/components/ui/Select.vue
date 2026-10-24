@@ -11,7 +11,7 @@ const model = defineModel<T>({ required: true })
 const props = withDefaults(
   defineProps<{
     options: SelectOption<T>[]
-    size?: 'sm' | 'md'
+    size?: 'sm' | 'md' | 'lg'
     placeholder?: string
     disabled?: boolean
   }>(),
@@ -152,7 +152,13 @@ onBeforeUnmount(() => document.removeEventListener('pointerdown', onDocumentPoin
       "
       :disabled="disabled"
       class="inline-flex w-full items-center justify-between gap-2 rounded-md border border-line bg-canvas text-left text-xs text-ink transition-colors duration-150 focus-visible:border-primary focus-visible:ring-2 focus-visible:ring-primary/15 focus-visible:outline-none disabled:cursor-not-allowed disabled:bg-surface-2 disabled:text-ink-3"
-      :class="size === 'sm' ? 'h-8 px-2' : 'h-9 px-2.5'"
+      :class="
+        size === 'sm'
+          ? 'h-8 px-2'
+          : size === 'lg'
+            ? 'h-10 px-3 text-sm'
+            : 'h-9 px-2.5'
+      "
       @click="toggle"
       @keydown="onKeydown"
     >

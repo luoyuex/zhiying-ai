@@ -108,7 +108,9 @@ async def _enqueue_screener_jobs(
             continue
         model = STRATEGY_FILTER_MODELS[strategy]
         payload = model.model_validate(setting.get("filters") or {})
-        await start_screener_job(redis, user.id, quota, strategy, payload)
+        await start_screener_job(
+            redis, user.id, quota, strategy, payload, trigger="scheduled"
+        )
         enqueued += 1
     return enqueued
 
@@ -143,7 +145,9 @@ async def _enqueue_watchlist_analysis(
         if enqueued >= remaining:
             break
         try:
-            await start_ai_job(redis, user.id, quota, symbol, force=False)
+            await start_ai_job(
+                redis, user.id, quota, symbol, force=False, trigger="scheduled"
+            )
             enqueued += 1
         except QuotaExceededError:
             raise

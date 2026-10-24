@@ -4,6 +4,7 @@ from datetime import datetime
 
 from pydantic import BaseModel, Field
 
+from app.core.config import settings
 from app.schemas.screener import (
     LowPriceBullAnalysisRequest,
     MainForceAnalysisRequest,
@@ -33,10 +34,18 @@ class AutomationSettingsUpdate(BaseModel):
     screener_enabled: bool = False
     analysis_enabled: bool = False
     # 每条任务线各自的执行时间（24 小时制），实际执行可能延迟至多 5 分钟
-    screener_run_hour: int = Field(default=17, ge=0, le=23)
-    screener_run_minute: int = Field(default=35, ge=0, le=59)
-    analysis_run_hour: int = Field(default=17, ge=0, le=23)
-    analysis_run_minute: int = Field(default=35, ge=0, le=59)
+    screener_run_hour: int = Field(
+        default_factory=lambda: settings.automation_cron_hour, ge=0, le=23
+    )
+    screener_run_minute: int = Field(
+        default_factory=lambda: settings.automation_cron_minute, ge=0, le=59
+    )
+    analysis_run_hour: int = Field(
+        default_factory=lambda: settings.automation_cron_hour, ge=0, le=23
+    )
+    analysis_run_minute: int = Field(
+        default_factory=lambda: settings.automation_cron_minute, ge=0, le=59
+    )
     strategy_settings: dict[ScreenerStrategyId, AutomationStrategySetting] = Field(
         default_factory=dict
     )
@@ -57,9 +66,17 @@ class AutomationSettingsUpdate(BaseModel):
 class AutomationSettingsResponse(BaseModel):
     screener_enabled: bool = False
     analysis_enabled: bool = False
-    screener_run_hour: int = 17
-    screener_run_minute: int = 35
-    analysis_run_hour: int = 17
-    analysis_run_minute: int = 35
+    screener_run_hour: int = Field(
+        default_factory=lambda: settings.automation_cron_hour
+    )
+    screener_run_minute: int = Field(
+        default_factory=lambda: settings.automation_cron_minute
+    )
+    analysis_run_hour: int = Field(
+        default_factory=lambda: settings.automation_cron_hour
+    )
+    analysis_run_minute: int = Field(
+        default_factory=lambda: settings.automation_cron_minute
+    )
     strategy_settings: dict = Field(default_factory=dict)
     updated_at: datetime | None = None

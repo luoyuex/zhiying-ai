@@ -72,6 +72,37 @@ const router = createRouter({
       component: () => import('@/pages/ReportDetailPage.vue'),
       meta: { requiresAuth: true, title: '分析报告' },
     },
+    {
+      path: '/admin',
+      component: () => import('@/components/admin/AdminShell.vue'),
+      meta: { requiresAuth: true, requiresAdmin: true, title: '后台管理' },
+      children: [
+        {
+          path: '',
+          name: 'admin-overview',
+          component: () => import('@/pages/admin/OverviewPage.vue'),
+          meta: { title: '后台概览' },
+        },
+        {
+          path: 'users',
+          name: 'admin-users',
+          component: () => import('@/pages/admin/UsersPage.vue'),
+          meta: { title: '用户与额度' },
+        },
+        {
+          path: 'users/:id',
+          name: 'admin-user',
+          component: () => import('@/pages/admin/UserDetailPage.vue'),
+          meta: { title: '用户详情' },
+        },
+        {
+          path: 'audit',
+          name: 'admin-audit',
+          component: () => import('@/pages/admin/AuditPage.vue'),
+          meta: { title: '审计日志' },
+        },
+      ],
+    },
     { path: '/:pathMatch(.*)*', redirect: '/' },
   ],
 })
@@ -92,6 +123,10 @@ router.beforeEach(async (to) => {
       name: 'login',
       query: { redirect: to.fullPath },
     }
+  }
+
+  if (to.meta.requiresAdmin && auth.user?.role !== 'admin') {
+    return { name: 'dashboard' }
   }
 
   if (to.meta.guestOnly && auth.isAuthenticated) {

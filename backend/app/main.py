@@ -10,6 +10,7 @@ from app.api.v1.router import api_router
 from app.core.config import settings
 from app.core.errors import AppError, ErrorCode
 from app.core.logging import get_logger, setup_logging
+from app.core.telemetry import start_telemetry, stop_telemetry
 from app.db.redis import close_redis, get_redis
 from app.db.session import SessionLocal, engine
 from app.providers.http import close_http_client
@@ -27,7 +28,9 @@ async def lifespan(_: FastAPI):
         settings.debug,
         settings.email_mode,
     )
+    await start_telemetry()
     yield
+    await stop_telemetry()
     await close_arq_pool()
     await close_http_client()
     await close_redis()

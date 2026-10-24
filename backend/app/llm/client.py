@@ -6,6 +6,7 @@
 
 import json
 import re
+import time
 from typing import Any
 
 import openai
@@ -14,6 +15,7 @@ from openai import AsyncOpenAI
 
 from app.core.config import settings
 from app.core.logging import get_logger
+from app.core.telemetry import emit_llm_call
 
 logger = get_logger(__name__)
 
@@ -93,8 +95,35 @@ class LLMClient:
         user_prompt: str,
         max_tokens: int | None = None,
         timeout: float | None = None,
+        reasoning_effort: str | None = None,
     ) -> str:
         client = self._client.with_options(timeout=timeout) if timeout else self._client
+        started = time.perf_counter()
+        effort = reasoning_effort or settings.llm_reasoning_effort
+        if effort == "default":
+            # SenseNova 6.8 的 thinking 会吃满 completion 额度；未显式配置时自动关闭。
+            effort = "none" if settings.llm_model.lower().startswith("sensenova") else None
+
+        def emit(
+            status: str,
+            *,
+            error_code: str | None = None,
+            finish_reason: str | None = None,
+            prompt_tokens: int = 0,
+            completion_tokens: int = 0,
+            model: str | None = None,
+        ) -> None:
+            emit_llm_call(
+                model=model or settings.llm_model,
+                prompt_tokens=prompt_tokens,
+                completion_tokens=completion_tokens,
+                duration_ms=int((time.perf_counter() - started) * 1000),
+                status=status,
+                error_code=error_code,
+                finish_reason=finish_reason,
+            )
+
+        extra_body = {"reasoning_effort": effort} if effort else None
         try:
             response = await client.chat.completions.create(
                 model=settings.llm_model,
@@ -104,32 +133,54 @@ class LLMClient:
                 ],
                 temperature=settings.llm_temperature,
                 max_tokens=max_tokens or settings.llm_max_tokens,
+                extra_body=extra_body,
             )
         except openai.RateLimitError as exc:
             logger.warning("LLM 限流: %s", exc)
+            emit("failed", error_code="LLM_BUSY")
             raise LLMRateLimitedError("LLM 服务限流，请稍后重试") from exc
         except openai.APITimeoutError as exc:
             logger.warning("LLM 超时: %s", exc)
+            emit("failed", error_code="LLM_TIMEOUT")
             raise LLMRequestError("LLM 请求超时") from exc
         except openai.OpenAIError as exc:
             logger.warning("LLM 调用失败: %s", exc)
+            emit("failed", error_code="LLM_ERROR")
             raise LLMRequestError("LLM 服务调用失败") from exc
 
         if not response.choices:
+            emit("failed", error_code="LLM_INVALID_RESPONSE")
             raise LLMResponseError("LLM 未返回候选结果")
         choice = response.choices[0]
         content = choice.message.content or ""
         usage = response.usage
         finish_reason = getattr(choice, "finish_reason", None)
+        prompt_tokens = int(getattr(usage, "prompt_tokens", 0) or 0)
+        completion_tokens = int(getattr(usage, "completion_tokens", 0) or 0)
         logger.info(
             "LLM 调用完成 model=%s prompt_tokens=%s completion_tokens=%s finish_reason=%s",
             response.model,
-            getattr(usage, "prompt_tokens", None),
-            getattr(usage, "completion_tokens", None),
+            prompt_tokens,
+            completion_tokens,
             finish_reason,
         )
         if not content and finish_reason == "length":
+            emit(
+                "failed",
+                error_code="LLM_INVALID_RESPONSE",
+                finish_reason=finish_reason,
+                prompt_tokens=prompt_tokens,
+                completion_tokens=completion_tokens,
+                model=response.model,
+            )
             raise LLMResponseError("LLM 思考过程耗尽 token，未输出正文")
+        emit(
+            "success",
+            finish_reason=finish_reason,
+            prompt_tokens=prompt_tokens,
+            completion_tokens=completion_tokens,
+            model=response.model,
+        )
         return content
 
     async def generate_json(
@@ -138,9 +189,16 @@ class LLMClient:
         user_prompt: str,
         max_tokens: int | None = None,
         timeout: float | None = None,
+        reasoning_effort: str | None = None,
     ) -> dict[str, Any]:
         return extract_json(
-            await self._complete(system_prompt, user_prompt, max_tokens, timeout)
+            await self._complete(
+                system_prompt,
+                user_prompt,
+                max_tokens,
+                timeout,
+                reasoning_effort,
+            )
         )
 
     async def generate_text(
@@ -149,10 +207,17 @@ class LLMClient:
         user_prompt: str,
         max_tokens: int | None = None,
         timeout: float | None = None,
+        reasoning_effort: str | None = None,
     ) -> str:
         """用于长文分析报告（不做 JSON 解析）。"""
         text = (
-            await self._complete(system_prompt, user_prompt, max_tokens, timeout)
+            await self._complete(
+                system_prompt,
+                user_prompt,
+                max_tokens,
+                timeout,
+                reasoning_effort,
+            )
         ).strip()
         if not text:
             raise LLMResponseError("LLM 返回为空")

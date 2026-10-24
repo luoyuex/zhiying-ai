@@ -7,6 +7,7 @@ from redis.asyncio import Redis
 
 from app.core.config import settings
 from app.core.logging import get_logger
+from app.core.telemetry import bind_context
 from app.llm.client import LLMClient, LLMNotConfiguredError, is_llm_configured
 from app.llm.portfolio_prompts import SYSTEM_PROMPT, build_portfolio_prompt
 from app.schemas.portfolio import (
@@ -120,10 +121,11 @@ async def diagnose_portfolio(
     if quota_used >= daily_quota:
         raise QuotaExceededError(daily_quota, seconds_to_midnight())
 
-    data = await llm_client.generate_json(
-        SYSTEM_PROMPT,
-        build_portfolio_prompt(build_portfolio_context(entries)),
-    )
+    with bind_context(user_id=user_id, task="portfolio"):
+        data = await llm_client.generate_json(
+            SYSTEM_PROMPT,
+            build_portfolio_prompt(build_portfolio_context(entries)),
+        )
     draft = PortfolioDiagnosisDraft.model_validate(data)
 
     new_used = quota_used + 1

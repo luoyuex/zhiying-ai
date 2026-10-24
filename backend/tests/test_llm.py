@@ -6,6 +6,7 @@ import openai
 import pytest
 from pydantic import ValidationError
 
+from app.core.config import settings
 from app.llm.client import LLMClient, LLMRequestError, extract_json
 from app.schemas.ai import AIAnalysisPayload
 
@@ -15,9 +16,11 @@ class FakeCompletions:
         self.content = content
         self.error = error
         self.calls = 0
+        self.last_kwargs: dict = {}
 
-    async def create(self, **_: object):
+    async def create(self, **kwargs: object):
         self.calls += 1
+        self.last_kwargs = kwargs
         if self.error:
             raise self.error
         return SimpleNamespace(
@@ -89,10 +92,42 @@ async def test_client_parses_openai_chat_completion():
     completions = FakeCompletions(content='```json\n{"a": 1}\n```')
     client = LLMClient(client=FakeSDK(completions))
 
-    data = await client.generate_json("system", "user")
+    data = await client.generate_json("system", "user", reasoning_effort="none")
 
     assert data == {"a": 1}
     assert completions.calls == 1
+    assert completions.last_kwargs["extra_body"] == {"reasoning_effort": "none"}
+
+
+async def test_client_allows_reasoning_effort_override():
+    completions = FakeCompletions(content='{"a": 1}')
+    client = LLMClient(client=FakeSDK(completions))
+
+    await client.generate_json("system", "user", reasoning_effort="low")
+
+    assert completions.last_kwargs["extra_body"] == {"reasoning_effort": "low"}
+
+
+async def test_client_auto_disables_sensenova_reasoning(monkeypatch):
+    monkeypatch.setattr(settings, "llm_model", "sensenova-6.8-flash-lite")
+    monkeypatch.setattr(settings, "llm_reasoning_effort", "default")
+    completions = FakeCompletions(content='{"a": 1}')
+    client = LLMClient(client=FakeSDK(completions))
+
+    await client.generate_json("system", "user")
+
+    assert completions.last_kwargs["extra_body"] == {"reasoning_effort": "none"}
+
+
+async def test_client_omits_reasoning_effort_for_other_models(monkeypatch):
+    monkeypatch.setattr(settings, "llm_model", "deepseek-chat")
+    monkeypatch.setattr(settings, "llm_reasoning_effort", "default")
+    completions = FakeCompletions(content='{"a": 1}')
+    client = LLMClient(client=FakeSDK(completions))
+
+    await client.generate_json("system", "user")
+
+    assert completions.last_kwargs["extra_body"] is None
 
 
 async def test_client_wraps_sdk_error():

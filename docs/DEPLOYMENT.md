@@ -184,6 +184,12 @@ DEBUG=false
 LLM_BASE_URL=https://api.deepseek.com/v1
 LLM_API_KEY=REPLACE_WITH_LLM_KEY
 LLM_MODEL=deepseek-chat
+# 推理力度：default/none/low/medium/high；default 时 SenseNova 自动按 none
+LLM_REASONING_EFFORT=default
+LLM_FINAL_REASONING_EFFORT=default
+LLM_MAX_TOKENS=8192
+LLM_ANALYST_MAX_TOKENS=8000
+LLM_FINAL_MAX_TOKENS=16000
 
 # ===== 任务队列 =====
 AI_JOB_EXECUTION=arq
@@ -903,6 +909,8 @@ docker stats --no-stream
 | 页面空白 / 刷新 404 | Nginx root、`/app/` 回退 | 确认 `root` 指向 `frontend/dist`；`/app/` 回退到 `app.html` |
 | 发布后样式丢失 | HTML 被缓存、旧 assets 不存在 | 确认 `index.html` / `app.html` 使用 `expires -1`，重新生成 `dist` |
 | 所有行情源失败 | 服务器出站网络 / 代理 | `curl` 腾讯 / 东财；检查安全组出站；必要时开启 `EGRESS_PROXY_ENABLED` |
+| 选股报「行情/资金流数据暂不可用」 | 东财资金流排行是否可达、代理白名单 | 跑 `python -m app.scripts.check_proxy`，按结论开代理或给服务商加白名单 IP |
+| 选股/分析报「AI 思考过程过长」 | 推理模型把 completion 额度用于思考，`finish_reason=length` | SenseNova 在 `default` 时会自动按 `none`；其他模型可显式设 `LLM_REASONING_EFFORT=none`，或提高 `LLM_ANALYST_MAX_TOKENS` / `LLM_FINAL_MAX_TOKENS`；重启 API + worker |
 | 种子同步失败 | 东财访问被拦截 | 先 `--dry-run`；检查出站网络；启用行情代理后重试 |
 | 定时任务不执行 | worker / LLM / 用户开关 / 额度 | 看 worker 日志；确认 LLM 已配置、任务已开启、当天额度未用完 |
 | 迁移失败 | 数据库密码 / 连接 / 版本 | `pg_isready`、检查 `DATABASE_URL`；迁移前先备份 |
