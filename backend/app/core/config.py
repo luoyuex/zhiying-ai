@@ -18,6 +18,8 @@ class Settings(BaseSettings):
     # 应用
     app_name: str = "智盈 AI"
     debug: bool = False
+    # 站点地址（用于邮件里的报告链接，不带末尾斜杠、不带 /app）
+    public_app_url: str = "http://127.0.0.1:5288"
     cors_origins: str = "http://localhost:5173"
     cookie_secure: bool = False
 
@@ -29,6 +31,8 @@ class Settings(BaseSettings):
     # 定时任务的默认执行时间（新用户/未自定义时使用；用户可在个人中心按任务线自定义）
     automation_cron_hour: int = 17
     automation_cron_minute: int = 35
+    # 定时任务结果邮件：等待所有任务完成的最长时间，超时则先发送已完成部分
+    automation_mail_wait_minutes: int = 120
 
     # 基础设施
     database_url: str = "postgresql+asyncpg://zhiying:zhiying@localhost:5432/zhiying"

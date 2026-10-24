@@ -29,6 +29,8 @@ def _to_response(row: AutomationSettings | None) -> AutomationSettingsResponse:
         analysis_run_hour=row.analysis_run_hour,
         analysis_run_minute=row.analysis_run_minute,
         strategy_settings=row.strategy_settings or {},
+        email_notify_enabled=row.email_notify_enabled,
+        notify_email=row.notify_email,
         updated_at=row.updated_at,
     )
 
@@ -61,6 +63,8 @@ async def update_settings(
                 analysis_run_hour=payload.analysis_run_hour,
                 analysis_run_minute=payload.analysis_run_minute,
                 strategy_settings=strategy_settings,
+                email_notify_enabled=payload.email_notify_enabled,
+                notify_email=payload.notify_email,
             )
             .on_conflict_do_update(
                 index_elements=[AutomationSettings.user_id],
@@ -72,6 +76,8 @@ async def update_settings(
                     "analysis_run_hour": payload.analysis_run_hour,
                     "analysis_run_minute": payload.analysis_run_minute,
                     "strategy_settings": strategy_settings,
+                    "email_notify_enabled": payload.email_notify_enabled,
+                    "notify_email": payload.notify_email,
                     "updated_at": func.now(),
                 },
             )

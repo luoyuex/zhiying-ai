@@ -176,6 +176,8 @@ SMTP_FROM_NAME="智盈 AI"
 
 # ===== 应用 =====
 APP_NAME="智盈 AI"
+# 定时任务结果邮件里的报告链接前缀（站点根地址，不带 /app）
+PUBLIC_APP_URL=https://example.com
 CORS_ORIGINS=https://example.com
 COOKIE_SECURE=true
 DEBUG=false
@@ -745,6 +747,15 @@ docker compose exec -T redis redis-cli GET ai:worker:alive
 - [ ] 到点后（最多延迟 5 分钟）在选股历史 / 报告历史看到结果
 - [ ] `backend/logs/worker.log` 或 `journalctl -u zhiying-worker` 有「定时任务入队」日志
 
+邮件通知（2026-10-24 新增）：
+
+- [ ] 个人中心 → 定时任务能看到「邮件通知」，开启后显示接收地址（默认账号邮箱），保存后刷新仍保留
+- [ ] `.env` 已配置 `PUBLIC_APP_URL`，邮件里的报告链接指向正式站点
+- [ ] 填写可收信地址并等任务跑完，收到当天汇总邮件
+- [ ] `backend/logs/worker.log` 有「定时任务汇总邮件已发送」日志
+
+完整更新步骤见 [RELEASE_NOTES.md](RELEASE_NOTES.md)。
+
 定时任务依赖：
 
 - worker 正在运行；
@@ -818,8 +829,10 @@ systemctl start zhiying-worker zhiying-api
 
 发布注意：
 
+- 每个版本需要手动补充的配置与专项验收见 **[RELEASE_NOTES.md](RELEASE_NOTES.md)**。
 - **不要运行 `git clean -fdx`**：`.env`、日志、`docker-compose.override.yml` 都在忽略列表中，会被删除。
 - 更新后对照 `.env.example`，如果新增了配置键，需要手动补到 `.env`。
+- **worker 必须重启**：定时任务调度、汇总邮件等 cron 在 worker 进程内注册，只重启 API 不会加载新代码。
 - 当前 ARQ worker 没有设置 `job_completion_wait`，`systemctl stop/restart zhiying-worker` 会立即取消正在跑的 AI / 选股任务。发布尽量避开用户使用高峰。
 - worker 启动时会立即执行一次定时任务调度。若当天已过用户设定的时间且尚未跑过，启动后会补跑；发布尽量避开默认的 17:35 等任务时间点。
 - API 重启不会中断 worker 中的 AI 任务，但会断开浏览器 SSE 连接；前端会自动回退到轮询，刷新页面也能恢复。

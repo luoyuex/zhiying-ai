@@ -18,6 +18,7 @@ from app.services.ai_job_service import (
     WORKER_HEARTBEAT_KEY,
     run_ai_job_task,
 )
+from app.services.automation_mail_service import send_due_digests
 from app.services.daily_automation_service import run_daily_automation_task
 from app.services.job_ledger import reconcile_stale_jobs
 from app.services.screener_job_service import run_screener_job_task
@@ -61,6 +62,11 @@ async def run_daily_automation(ctx: dict) -> None:
     await run_daily_automation_task(ctx["redis"])
 
 
+async def run_automation_mail(ctx: dict) -> None:
+    """定时任务结果汇总邮件（与调度器错开 2 分钟，等任务落库后再判断）。"""
+    await send_due_digests(ctx["redis"])
+
+
 async def reconcile_jobs(ctx: dict) -> None:
     """把 worker 崩溃后长期停留的任务标为失败。"""
     count = await reconcile_stale_jobs(settings.llm_job_timeout_seconds + 120)
@@ -84,7 +90,13 @@ async def on_shutdown(ctx: dict) -> None:
 
 
 class WorkerSettings:
-    functions = [run_ai_job, run_screener_job, run_daily_automation, reconcile_jobs]
+    functions = [
+        run_ai_job,
+        run_screener_job,
+        run_daily_automation,
+        run_automation_mail,
+        reconcile_jobs,
+    ]
     cron_jobs = [
         cron(worker_heartbeat, second={0, 30}, run_at_startup=True),
         # 每 5 分钟触发一次调度器；用户按各自设置的时间执行（per-user 防重键保证当天只跑一次）
@@ -95,6 +107,12 @@ class WorkerSettings:
         ),
         cron(
             reconcile_jobs,
+            minute={2, 7, 12, 17, 22, 27, 32, 37, 42, 47, 52, 57},
+            run_at_startup=True,
+        ),
+        # 汇总邮件：每 5 分钟检查，等当天定时任务全部结束后发送
+        cron(
+            run_automation_mail,
             minute={2, 7, 12, 17, 22, 27, 32, 37, 42, 47, 52, 57},
             run_at_startup=True,
         ),

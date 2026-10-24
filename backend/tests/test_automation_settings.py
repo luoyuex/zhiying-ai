@@ -32,6 +32,8 @@ async def test_settings_default_and_roundtrip():
         assert default.screener_enabled is False
         assert default.analysis_enabled is False
         assert default.strategy_settings == {}
+        assert default.email_notify_enabled is False
+        assert default.notify_email is None
 
         app.dependency_overrides[get_current_user] = lambda: user
         transport = ASGITransport(app=app)
@@ -48,6 +50,8 @@ async def test_settings_default_and_roundtrip():
                     "strategy_settings": {
                         "main_force": {"enabled": True, "filters": VALID_FILTERS}
                     },
+                    "email_notify_enabled": True,
+                    "notify_email": " Notify@Example.com ",
                 },
             )
             assert response.status_code == 200, response.text
@@ -58,6 +62,8 @@ async def test_settings_default_and_roundtrip():
             assert body["screener_run_minute"] == 30
             assert body["analysis_run_hour"] == 21
             assert body["analysis_run_minute"] == 5
+            assert body["email_notify_enabled"] is True
+            assert body["notify_email"] == "notify@example.com"
             # filters 补全默认值
             filters = body["strategy_settings"]["main_force"]["filters"]
             assert filters["final_n"] == 3
@@ -113,6 +119,30 @@ async def test_settings_invalid_filters_rejected():
             )
             assert response.status_code == 422, response.text
 
+            # 开启邮件通知但未填地址
+            response = await client.put(
+                "/api/v1/automation/settings",
+                json={
+                    "screener_enabled": True,
+                    "email_notify_enabled": True,
+                    "notify_email": "",
+                    "strategy_settings": {},
+                },
+            )
+            assert response.status_code == 422, response.text
+
+            # 邮箱格式非法
+            response = await client.put(
+                "/api/v1/automation/settings",
+                json={
+                    "screener_enabled": True,
+                    "email_notify_enabled": True,
+                    "notify_email": "not-an-email",
+                    "strategy_settings": {},
+                },
+            )
+            assert response.status_code == 422, response.text
+
         # 两次失败请求都不应留下任何设置记录
         assert (await get_settings(user.id)).strategy_settings == {}
     finally:
@@ -127,9 +157,8 @@ async def test_settings_user_isolation():
     other = await make_user()
     try:
         await get_settings(user.id)
-        from app.services.automation_settings_service import update_settings
-
         from app.schemas.automation import AutomationSettingsUpdate
+        from app.services.automation_settings_service import update_settings
 
         await update_settings(
             user.id,

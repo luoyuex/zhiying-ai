@@ -14,12 +14,15 @@ A 股 AI 分析工作台。前端 Vue 3 + TypeScript，后端 FastAPI + PostgreS
 - **六维数据**：行情/技术、财务指标（东财 F10，最近 6 期）、资金流（东财近 30 日）、市场情绪（ARBR/换手/RSI/指数）、公开网页（元宝搜索）
 - **六分析师 + 首席决策**：技术面/基本面/资金面/风险/情绪/新闻六份结构化报告由代码基于真实数据生成；首席策略官 LLM 做最终决策（买入/持有/卖出 + 操作建议/持有周期/仓位/风险），失败自动规则兜底；三档价位始终由代码计算
 - **历史报告**：每次生成落库 PostgreSQL；顶栏头像菜单 →「历史报告」可查看当前用户全部记录（按日期分组、代码/名称筛选），也可在个股页查看该股最近 6 份；报告页完整展示六分析师全部依据/风险/数据源与首席决策
+- **定时任务**：个人中心可开启每日定时选股与自选股分析，自定义执行时间与各策略参数；可填写邮件接收地址，任务跑完后把当天结果汇总成一封邮件（同一天同一任务线仅一封）
 - **元宝搜索（可选）**：一次 AI 分析最多 1 次公开网页检索，缓存 30 分钟；命中 6h 报告缓存时连搜索也跳过
 - 接口：`/api/v1/stocks/{symbol}/quote`、`/kline`、`/analysis`、`/ai-analysis`、`/api/v1/ai/jobs/{id}`、`/api/v1/analysis/reports`
 
 > 📋 完整的开发计划、已完成/未完成清单与风险登记见 **[docs/DEVELOPMENT_PLAN.md](docs/DEVELOPMENT_PLAN.md)**。
 >
 > 生产部署（Nginx 同域反代 + HTTPS + systemd + Docker）见 **[docs/DEPLOYMENT.md](docs/DEPLOYMENT.md)**。
+>
+> 每个版本需要执行的更新步骤与新增配置见 **[docs/RELEASE_NOTES.md](docs/RELEASE_NOTES.md)**。
 
 ---
 

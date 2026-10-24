@@ -20,6 +20,8 @@ export interface AutomationSettings {
   analysis_run_hour: number
   analysis_run_minute: number
   strategy_settings: Partial<Record<AutomationStrategyId, AutomationStrategySetting>>
+  email_notify_enabled: boolean
+  notify_email: string | null
   updated_at: string | null
 }
 
@@ -31,6 +33,8 @@ export interface AutomationSettingsUpdate {
   analysis_run_hour: number
   analysis_run_minute: number
   strategy_settings: Partial<Record<AutomationStrategyId, AutomationStrategySetting>>
+  email_notify_enabled: boolean
+  notify_email: string | null
 }
 
 export const automationApi = {

@@ -2,7 +2,7 @@
 
 from datetime import datetime
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, EmailStr, Field, field_validator, model_validator
 
 from app.core.config import settings
 from app.schemas.screener import (
@@ -49,6 +49,22 @@ class AutomationSettingsUpdate(BaseModel):
     strategy_settings: dict[ScreenerStrategyId, AutomationStrategySetting] = Field(
         default_factory=dict
     )
+    email_notify_enabled: bool = False
+    notify_email: EmailStr | None = None
+
+    @field_validator("notify_email", mode="before")
+    @classmethod
+    def normalize_notify_email(cls, value: object) -> str | None:
+        if value is None:
+            return None
+        text = str(value).strip().lower()
+        return text or None
+
+    @model_validator(mode="after")
+    def require_notify_email(self) -> "AutomationSettingsUpdate":
+        if self.email_notify_enabled and not self.notify_email:
+            raise ValueError("开启邮件通知时必须填写接收地址")
+        return self
 
     def normalized_strategy_settings(self) -> dict:
         """逐策略校验 filters 并补全默认值；失败抛 pydantic.ValidationError（API 层转 422）。"""
@@ -79,4 +95,6 @@ class AutomationSettingsResponse(BaseModel):
         default_factory=lambda: settings.automation_cron_minute
     )
     strategy_settings: dict = Field(default_factory=dict)
+    email_notify_enabled: bool = False
+    notify_email: str | None = None
     updated_at: datetime | None = None

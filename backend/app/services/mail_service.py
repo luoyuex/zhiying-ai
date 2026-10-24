@@ -85,23 +85,29 @@ def _render(code: str, purpose: str, ttl_minutes: int) -> tuple[str, str]:
     return text, html
 
 
-async def send_otp_email(to: str, code: str, purpose: str, ttl_seconds: int) -> None:
-    ttl_minutes = max(ttl_seconds // 60, 1)
-    text, html = _render(code, purpose, ttl_minutes)
-
+async def send_email(
+    *,
+    to: str,
+    subject: str,
+    text: str,
+    html: str,
+    console_detail: str = "",
+) -> None:
+    """发送一封邮件；SMTP 未配置时降级为日志输出，不抛错。"""
     if settings.email_mode == "console" or not settings.smtp_user or not settings.smtp_password:
+        detail = f" {console_detail}" if console_detail else ""
         logger.warning(
-            "[MAIL:console] to=%s purpose=%s code=%s（未配置 SMTP，验证码仅打印到日志）",
+            "[MAIL:console] to=%s subject=%s%s（未配置 SMTP，未真实发送）",
             to,
-            purpose,
-            code,
+            subject,
+            detail,
         )
         return
 
     message = EmailMessage()
     message["From"] = formataddr((settings.smtp_from_name, settings.smtp_user))
     message["To"] = to
-    message["Subject"] = f"{settings.app_name} {PURPOSE_LABELS.get(purpose, '')}验证码：{code}"
+    message["Subject"] = subject
     message.set_content(text)
     message.add_alternative(html, subtype="html")
 
@@ -127,7 +133,20 @@ async def send_otp_email(to: str, code: str, purpose: str, ttl_seconds: int) -> 
                 timeout=15,
             )
     except Exception as exc:  # noqa: BLE001
-        logger.exception("发送验证码邮件失败 to=%s host=%s", to, settings.smtp_host)
+        logger.exception("发送邮件失败 to=%s host=%s subject=%s", to, settings.smtp_host, subject)
         raise errors.mail_send_failed() from exc
 
-    logger.info("OTP email sent to=%s purpose=%s", to, purpose)
+    logger.info("email sent to=%s subject=%s", to, subject)
+
+
+async def send_otp_email(to: str, code: str, purpose: str, ttl_seconds: int) -> None:
+    ttl_minutes = max(ttl_seconds // 60, 1)
+    text, html = _render(code, purpose, ttl_minutes)
+    await send_email(
+        to=to,
+        subject=f"{settings.app_name} {PURPOSE_LABELS.get(purpose, '')}验证码：{code}",
+        text=text,
+        html=html,
+        console_detail=f"purpose={purpose} code={code}",
+    )
+    logger.info("OTP email handled to=%s purpose=%s", to, purpose)
