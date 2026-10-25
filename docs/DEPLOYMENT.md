@@ -198,7 +198,9 @@ LLM_PRICE_OUTPUT_PER_M=
 
 # ===== 任务队列 =====
 AI_JOB_EXECUTION=arq
-AI_WORKER_MAX_JOBS=2
+# 同时执行的任务数；实际模型并发 ≈ 本值 × LLM_ANALYST_CONCURRENCY
+# 出现「LLM 服务限流」（LLM_BUSY）时先调小本值
+AI_WORKER_MAX_JOBS=4
 AI_DAILY_QUOTA_OVERRIDE=0
 ```
 
@@ -428,6 +430,8 @@ EOF
 ```
 
 > 两个服务都从 `/opt/zhiying-ai/.env` 读取配置，不要再写 `EnvironmentFile=`，避免两套配置不一致。
+
+> `AI_WORKER_MAX_JOBS` 决定单个 worker 进程内同时跑几个任务（当前 4）。队列积压时优先调大它，但模型实际并发约为它 × `LLM_ANALYST_CONCURRENCY`（默认 3），要低于模型服务商的限流阈值；worker 日志出现「LLM 服务限流」或任务大面积 `LLM_BUSY` 失败就回调。改完只需 `systemctl restart zhiying-worker`，不用重启 API。
 
 ### 6.3 启动与检查
 

@@ -169,7 +169,7 @@ LLM_CACHE_SECONDS=21600
 
 > 分析流程：六位分析师并发 → 团队讨论（LLM 整理 4-6 轮交叉回应）→ 首席策略官决策。任一步失败会自动回退到规则版，并在报告中标记 `engine=rule` / `source=rule`。整份报告仍只消耗 1 次额度。
 >
-> 任务执行：默认 `AI_JOB_EXECUTION=arq`，由 `npm run worker` 消费；API 重启不会中断分析，但 worker 重启会取消进行中的任务（当前未配置 `job_completion_wait`），请在低峰发布。worker 每 30 秒写入心跳 `ai:worker:alive`（TTL 120 秒），没有心跳时新任务直接返回 503。
+> 任务执行：默认 `AI_JOB_EXECUTION=arq`，由 `npm run worker` 消费；API 重启不会中断分析，但 worker 重启会取消进行中的任务（当前未配置 `job_completion_wait`），请在低峰发布。worker 每 30 秒写入心跳 `ai:worker:alive`（TTL 120 秒），没有心跳时新任务直接返回 503。单个 worker 同时执行 `AI_WORKER_MAX_JOBS`（默认 4）个任务，实际模型并发约为它 × `LLM_ANALYST_CONCURRENCY`；队列积压时可调大，出现 `LLM_BUSY` 限流则回调。
 
 ---
 

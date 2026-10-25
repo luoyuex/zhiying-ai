@@ -129,7 +129,10 @@ class Settings(BaseSettings):
 
     # 任务执行：arq 走独立 worker 进程（重启不中断）；inline 仅用于本地调试
     ai_job_execution: Literal["arq", "inline"] = "arq"
-    ai_worker_max_jobs: int = 2
+    # 单个 worker 进程内同时执行的任务数；每个分析任务内部还有
+    # llm_analyst_concurrency 路并发，实际模型并发约为两者相乘。
+    # 调大前先确认模型服务限流阈值；日志出现「LLM 服务限流」就回调。
+    ai_worker_max_jobs: int = 4
     ai_worker_heartbeat_ttl_seconds: int = 120
 
     # 开发期额度覆盖：>0 时所有用户统一按该值计算，0 表示使用用户表里的额度
