@@ -31,6 +31,13 @@ class PriceAlert(Base):
     name: Mapped[str] = mapped_column(String(64), server_default="", nullable=False)
     direction: Mapped[str] = mapped_column(String(8), nullable=False)  # above / below
     target_price: Mapped[float] = mapped_column(Numeric(12, 3), nullable=False)
+    # custom / entry / take_profit / stop_loss；报告价位创建的提醒带 report_id
+    kind: Mapped[str] = mapped_column(
+        String(16), default="custom", server_default="custom", nullable=False
+    )
+    report_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("analysis_reports.id", ondelete="SET NULL"), index=True
+    )
     status: Mapped[str] = mapped_column(
         String(12), server_default="active", nullable=False
     )  # active / triggered

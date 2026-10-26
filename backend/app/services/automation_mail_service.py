@@ -11,7 +11,7 @@ from dataclasses import dataclass, field
 from datetime import datetime, time, timedelta
 from zoneinfo import ZoneInfo
 
-from sqlalchemy import select
+from sqlalchemy import and_, or_, select
 
 from app.core.config import settings
 from app.core.logging import get_logger
@@ -22,6 +22,7 @@ from app.db.models.screener_record import ScreenerRecord
 from app.db.models.user import User
 from app.db.session import SessionLocal
 from app.services.mail_service import send_email
+from app.services.webhook_service import send_webhook
 
 logger = get_logger(__name__)
 TZ_SHANGHAI = ZoneInfo("Asia/Shanghai")
@@ -133,14 +134,22 @@ async def send_due_digests(redis, *, now: datetime | None = None) -> int:  # noq
 
 async def _load_candidates() -> list[tuple[User, AutomationSettings]]:
     async with SessionLocal() as session:
+        email_ready = and_(
+            AutomationSettings.email_notify_enabled.is_(True),
+            AutomationSettings.notify_email.is_not(None),
+            AutomationSettings.notify_email != "",
+        )
+        webhook_ready = and_(
+            AutomationSettings.webhook_notify_enabled.is_(True),
+            AutomationSettings.webhook_url.is_not(None),
+            AutomationSettings.webhook_url != "",
+        )
         stmt = (
             select(User, AutomationSettings)
             .join(AutomationSettings, AutomationSettings.user_id == User.id)
             .where(
                 User.status == "active",
-                AutomationSettings.email_notify_enabled.is_(True),
-                AutomationSettings.notify_email.is_not(None),
-                AutomationSettings.notify_email != "",
+                or_(email_ready, webhook_ready),
                 (AutomationSettings.screener_enabled.is_(True))
                 | (AutomationSettings.analysis_enabled.is_(True)),
             )
@@ -155,7 +164,11 @@ async def _process_user(
     now: datetime,
 ) -> int:
     notify_to = (automation.notify_email or "").strip()
-    if not notify_to:
+    email_ready = bool(automation.email_notify_enabled and notify_to)
+    webhook_ready = bool(
+        automation.webhook_notify_enabled and (automation.webhook_url or "").strip()
+    )
+    if not email_ready and not webhook_ready:
         return 0
 
     line_times = []
@@ -232,10 +245,28 @@ async def _process_user(
     subject = f"{settings.app_name} · {now.month}月{now.day}日{labels}结果"
     text, html_body = _render(subject, digest, now)
 
-    try:
-        await send_email(to=notify_to, subject=subject, text=text, html=html_body)
-    except Exception as exc:  # noqa: BLE001 - 发信失败下一轮重试
-        logger.warning("定时任务汇总邮件发送失败 user=%s: %s", user.id, exc)
+    email_ok = False
+    webhook_ok = False
+    if email_ready:
+        try:
+            await send_email(to=notify_to, subject=subject, text=text, html=html_body)
+            email_ok = True
+        except Exception as exc:  # noqa: BLE001 - 单渠道失败不影响另一渠道
+            logger.warning("定时任务汇总邮件发送失败 user=%s: %s", user.id, exc)
+    if webhook_ready:
+        try:
+            await send_webhook(
+                url=automation.webhook_url,
+                kind=automation.webhook_type,
+                keyword=automation.webhook_keyword,
+                title=subject,
+                text=text,
+            )
+            webhook_ok = True
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("定时任务汇总 Webhook 发送失败 user=%s: %s", user.id, exc)
+
+    if (email_ready or webhook_ready) and not email_ok and not webhook_ok:
         await redis.delete(claim_key)
         return 0
 
@@ -498,7 +529,7 @@ def _render(subject: str, digest: _Digest, now: datetime) -> tuple[str, str]:
             '<tr><td style="padding-top:24px;border-top:1px solid #E6E8EB;'
             'font-size:12px;color:#8A9099;line-height:1.7;">'
             "以上结果由系统自动生成，仅供研究参考，不构成投资建议。<br />"
-            "如需调整接收地址或关闭邮件通知，请在个人中心 → 定时任务中修改。</td></tr>",
+            "如需调整接收地址、Webhook 或关闭通知，请在个人中心 → 定时与通知中修改。</td></tr>",
             "</table></td></tr></table></td></tr></table></body></html>",
         ]
     )

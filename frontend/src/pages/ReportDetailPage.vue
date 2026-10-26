@@ -4,6 +4,8 @@ import { useRoute, useRouter } from 'vue-router'
 
 import type { AIAnalysisResponse } from '@/api/ai'
 import { reportsApi } from '@/api/reports'
+import { watchlistApi, type PriceAlertKind } from '@/api/watchlist'
+import { notifyPriceAlertsChanged } from '@/composables/usePriceAlertsSync'
 import AppShell from '@/components/layout/AppShell.vue'
 import AnalystRadar from '@/components/report/AnalystRadar.vue'
 import DiscussionTimeline from '@/components/report/DiscussionTimeline.vue'
@@ -125,6 +127,31 @@ const compareError = ref('')
 const reportRoot = ref<HTMLElement | null>(null)
 const pdfBusy = ref(false)
 const pdfError = ref('')
+const alertSavingKind = ref<PriceAlertKind | ''>('')
+const alertMessage = ref('')
+const alertError = ref('')
+
+async function createLevelAlert(kind: Exclude<PriceAlertKind, 'custom'>): Promise<void> {
+  if (!report.value || alertSavingKind.value) return
+  alertSavingKind.value = kind
+  alertMessage.value = ''
+  alertError.value = ''
+  try {
+    const { data } = await watchlistApi.createReportAlert(
+      report.value.symbol,
+      kind,
+      String(route.params.id ?? ''),
+    )
+    const label =
+      kind === 'entry' ? '入场' : kind === 'take_profit' ? '止盈' : '止损'
+    alertMessage.value = `${label}提醒已设置：${data.target_price.toFixed(2)} 元，触发一次后自动结束`
+    notifyPriceAlertsChanged()
+  } catch (err) {
+    alertError.value = getErrorMessage(err, '提醒设置失败，请稍后重试')
+  } finally {
+    alertSavingKind.value = ''
+  }
+}
 
 async function exportPdf(): Promise<void> {
   if (!reportRoot.value || !report.value || pdfBusy.value) return
@@ -359,6 +386,48 @@ watch(
               {{ item.value }}
             </div>
           </div>
+        </div>
+
+        <div
+          v-if="decision.levels"
+          class="mt-3 flex flex-wrap items-center gap-2 text-[11px]"
+          data-pdf-hide
+        >
+          <span class="text-ink-3">关键价位提醒</span>
+          <button
+            type="button"
+            class="rounded-md border border-line-strong bg-canvas px-2.5 py-1 text-ink-2 transition-colors hover:border-ink-3 hover:text-ink disabled:cursor-not-allowed disabled:opacity-50"
+            :disabled="!!alertSavingKind"
+            @click="createLevelAlert('entry')"
+          >
+            {{ alertSavingKind === 'entry' ? '设置中…' : `入场 ≤ ${decision.levels.entry.toFixed(2)}` }}
+          </button>
+          <button
+            type="button"
+            class="rounded-md border border-line-strong bg-canvas px-2.5 py-1 text-ink-2 transition-colors hover:border-ink-3 hover:text-ink disabled:cursor-not-allowed disabled:opacity-50"
+            :disabled="!!alertSavingKind"
+            @click="createLevelAlert('take_profit')"
+          >
+            {{
+              alertSavingKind === 'take_profit'
+                ? '设置中…'
+                : `止盈 ≥ ${decision.levels.take_profit.toFixed(2)}`
+            }}
+          </button>
+          <button
+            type="button"
+            class="rounded-md border border-line-strong bg-canvas px-2.5 py-1 text-ink-2 transition-colors hover:border-ink-3 hover:text-ink disabled:cursor-not-allowed disabled:opacity-50"
+            :disabled="!!alertSavingKind"
+            @click="createLevelAlert('stop_loss')"
+          >
+            {{
+              alertSavingKind === 'stop_loss'
+                ? '设置中…'
+                : `止损 ≤ ${decision.levels.stop_loss.toFixed(2)}`
+            }}
+          </button>
+          <span v-if="alertMessage" class="text-down">{{ alertMessage }}</span>
+          <span v-if="alertError" class="text-danger">{{ alertError }}</span>
         </div>
 
         <div class="mt-4 grid gap-5 lg:grid-cols-2">

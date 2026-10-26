@@ -6,6 +6,7 @@ export interface User {
   status: string
   email_verified_at: string | null
   daily_analysis_quota: number
+  avatar_url: string | null
   created_at: string
 }
 

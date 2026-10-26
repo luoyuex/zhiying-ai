@@ -5,6 +5,7 @@ import type { AIJobState } from '@/api/ai'
 import { watchlistApi, type WatchlistEntry } from '@/api/watchlist'
 import AppShell from '@/components/layout/AppShell.vue'
 import PortfolioDiagnosis from '@/components/watchlist/PortfolioDiagnosis.vue'
+import PriceAlertsOverview from '@/components/watchlist/PriceAlertsOverview.vue'
 import WatchlistCard from '@/components/watchlist/WatchlistCard.vue'
 import { useAIBatch } from '@/composables/useAIBatch'
 import { useAuthStore } from '@/stores/auth'
@@ -183,6 +184,7 @@ onMounted(async () => {
     <p v-if="batchError" class="mt-3 text-xs text-danger">{{ batchError }}</p>
 
     <PortfolioDiagnosis v-if="!loading && !error && watchlist.length" class="mt-6" />
+    <PriceAlertsOverview v-if="!loading && !error" />
 
     <div class="mt-6">
       <div v-if="loading" class="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">

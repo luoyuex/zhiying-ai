@@ -55,6 +55,18 @@ class AutomationSettings(Base):
         Boolean, default=True, server_default=text("true"), nullable=False
     )
     notify_email: Mapped[str | None] = mapped_column(String(254))
+    # Webhook 通知：定时汇总与价位提醒各自开关，共用类型/地址/关键词
+    webhook_notify_enabled: Mapped[bool] = mapped_column(
+        Boolean, default=False, server_default=text("false"), nullable=False
+    )
+    price_alert_webhook_enabled: Mapped[bool] = mapped_column(
+        Boolean, default=True, server_default=text("true"), nullable=False
+    )
+    webhook_type: Mapped[str] = mapped_column(
+        String(16), default="dingtalk", server_default="dingtalk", nullable=False
+    )
+    webhook_url: Mapped[str | None] = mapped_column(String(512))
+    webhook_keyword: Mapped[str | None] = mapped_column(String(64))
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )

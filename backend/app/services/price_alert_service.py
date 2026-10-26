@@ -15,6 +15,7 @@ from sqlalchemy import select, update
 
 from app.core.config import settings
 from app.core.logging import get_logger
+from app.db.models.analysis_report import AnalysisReport
 from app.db.models.automation_settings import AutomationSettings
 from app.db.models.price_alert import PriceAlert
 from app.db.models.stock import Stock
@@ -24,6 +25,7 @@ from app.providers.symbols import InvalidSymbolError, parse_symbol
 from app.schemas.watchlist import PriceAlertView
 from app.services.mail_service import send_email
 from app.services.quote_batch import fetch_quotes
+from app.services.webhook_service import send_webhook
 
 logger = get_logger(__name__)
 TZ_SHANGHAI = ZoneInfo("Asia/Shanghai")
@@ -34,6 +36,13 @@ SESSION_START = time(9, 30)
 SESSION_END = time(15, 0)
 
 DIRECTION_LABELS = {"above": "涨到", "below": "跌破"}
+KIND_LABELS = {
+    "custom": "自定义",
+    "entry": "入场",
+    "take_profit": "止盈",
+    "stop_loss": "止损",
+}
+KIND_DIRECTIONS = {"entry": "below", "take_profit": "above", "stop_loss": "below"}
 
 
 class PriceAlertLimitError(Exception):
@@ -44,6 +53,10 @@ class PriceAlertNotWatchlistedError(Exception):
     pass
 
 
+class PriceAlertReportError(Exception):
+    """报告不存在或没有可用的目标价位。"""
+
+
 def _to_view(row: PriceAlert) -> PriceAlertView:
     return PriceAlertView(
         id=str(row.id),
@@ -51,6 +64,8 @@ def _to_view(row: PriceAlert) -> PriceAlertView:
         name=row.name,
         direction=row.direction,
         target_price=float(row.target_price),
+        kind=row.kind or "custom",
+        report_id=str(row.report_id) if row.report_id else None,
         status=row.status,
         triggered_price=float(row.triggered_price) if row.triggered_price is not None else None,
         triggered_at=row.triggered_at,
@@ -58,15 +73,76 @@ def _to_view(row: PriceAlert) -> PriceAlertView:
     )
 
 
+async def _resolve_report_level(
+    user_id: object,
+    symbol: str,
+    report_id: uuid.UUID,
+    kind: str,
+) -> tuple[str, float]:
+    async with SessionLocal() as session:
+        report = await session.scalar(
+            select(AnalysisReport).where(
+                AnalysisReport.id == report_id,
+                AnalysisReport.user_id == user_id,
+                AnalysisReport.symbol == symbol,
+            )
+        )
+    if report is None:
+        raise PriceAlertReportError("报告不存在或不属于当前用户")
+    payload = report.report or {}
+    decision = payload.get("decision") or {}
+    levels = decision.get("levels") or payload.get("levels") or {}
+    try:
+        value = float(levels[kind])
+    except (KeyError, TypeError, ValueError) as exc:
+        raise PriceAlertReportError("该报告没有可用的目标价位") from exc
+    if value <= 0:
+        raise PriceAlertReportError("该报告的目标价位无效")
+    direction = KIND_DIRECTIONS.get(kind)
+    if direction is None:
+        raise PriceAlertReportError("不支持的提醒类型")
+    return direction, value
+
+
 async def create_alert(
     user_id: object,
     raw_symbol: str,
     *,
-    direction: str,
-    target_price: float,
+    direction: str | None = None,
+    target_price: float | None = None,
+    kind: str = "custom",
+    report_id: uuid.UUID | None = None,
 ) -> PriceAlertView:
     symbol = parse_symbol(raw_symbol).code
+    if kind != "custom":
+        if report_id is None:
+            raise PriceAlertReportError("从报告价位创建提醒时必须提供报告")
+        direction, resolved = await _resolve_report_level(
+            user_id, symbol, report_id, kind
+        )
+        target_price = resolved
+    if direction not in ("above", "below") or target_price is None:
+        raise PriceAlertReportError("提醒方向和目标价不完整")
+
     async with SessionLocal() as session:
+        # 同一报告价位只保留一条生效中的提醒，重复创建时更新目标价
+        if kind != "custom":
+            existing = await session.scalar(
+                select(PriceAlert).where(
+                    PriceAlert.user_id == user_id,
+                    PriceAlert.symbol == symbol,
+                    PriceAlert.kind == kind,
+                    PriceAlert.status == "active",
+                )
+            )
+            if existing is not None:
+                existing.direction = direction
+                existing.target_price = target_price
+                existing.report_id = report_id
+                await session.commit()
+                await session.refresh(existing)
+                return _to_view(existing)
+
         active_rows = (
             await session.scalars(
                 select(PriceAlert.id).where(
@@ -87,6 +163,8 @@ async def create_alert(
             name=name_row or "",
             direction=direction,
             target_price=target_price,
+            kind=kind,
+            report_id=report_id,
         )
         session.add(row)
         await session.commit()
@@ -184,14 +262,21 @@ async def run_price_alert_check(*, now: datetime | None = None) -> int:
     if not hit_count:
         return 0
 
-    sent = 0
+    mail_sent = 0
+    webhook_sent = 0
     for user_id, alerts in triggered_by_user.items():
         try:
-            if await _send_alert_mail(user_id, alerts, current):
-                sent += 1
-        except Exception as exc:  # noqa: BLE001 - 单用户发信失败不影响其他
-            logger.warning("价位提醒邮件发送失败 user=%s: %s", user_id, exc)
-    logger.info("价位提醒触发 %s 条，发送邮件 %s 封", hit_count, sent)
+            mail_ok, webhook_ok = await _send_alert_notifications(user_id, alerts, current)
+            mail_sent += int(mail_ok)
+            webhook_sent += int(webhook_ok)
+        except Exception as exc:  # noqa: BLE001 - 单用户发送失败不影响其他
+            logger.warning("价位提醒通知发送失败 user=%s: %s", user_id, exc)
+    logger.info(
+        "价位提醒触发 %s 条，邮件 %s 封，Webhook %s 条",
+        hit_count,
+        mail_sent,
+        webhook_sent,
+    )
     return hit_count
 
 
@@ -199,15 +284,21 @@ def _app_url(path: str) -> str:
     return f"{settings.public_app_url.rstrip('/')}/app{path}"
 
 
-async def _send_alert_mail(user_id: object, alerts: list[PriceAlert], now: datetime) -> bool:
-    """按统一通知设置发送：价位提醒开关 + 接收地址（留空回落账号邮箱）。"""
+async def _send_alert_notifications(
+    user_id: object, alerts: list[PriceAlert], now: datetime
+) -> tuple[bool, bool]:
+    """按统一通知设置发送邮件与 Webhook；任一渠道未配置/关闭则跳过该渠道。"""
     async with SessionLocal() as session:
         row = (
             await session.execute(
                 select(
                     User.email,
                     AutomationSettings.price_alert_email_enabled,
+                    AutomationSettings.price_alert_webhook_enabled,
                     AutomationSettings.notify_email,
+                    AutomationSettings.webhook_type,
+                    AutomationSettings.webhook_url,
+                    AutomationSettings.webhook_keyword,
                 )
                 .outerjoin(
                     AutomationSettings, AutomationSettings.user_id == User.id
@@ -216,26 +307,31 @@ async def _send_alert_mail(user_id: object, alerts: list[PriceAlert], now: datet
             )
         ).first()
     if row is None:
-        return False
-    account_email, alert_email_enabled, notify_email = row
-    # 没有设置行时按默认开启处理
-    if alert_email_enabled is False:
-        logger.info("价位提醒邮件已关闭，跳过发送 user=%s", user_id)
-        return False
+        return False, False
+    (
+        account_email,
+        alert_email_enabled,
+        alert_webhook_enabled,
+        notify_email,
+        webhook_type,
+        webhook_url,
+        webhook_keyword,
+    ) = row
+
     recipient = (notify_email or "").strip() or (account_email or "").strip()
-    if not recipient:
-        return False
+    email_ready = alert_email_enabled is not False and bool(recipient)
+    webhook_ready = alert_webhook_enabled is not False and bool((webhook_url or "").strip())
+    if not email_ready and not webhook_ready:
+        logger.info("价位提醒通知渠道均关闭或未配置，跳过发送 user=%s", user_id)
+        return False, False
 
     subject = f"{settings.app_name} · 价位提醒触发（{now.month}月{now.day}日）"
     lines = [f"【{settings.app_name}】你设置的 {len(alerts)} 条价位提醒已触发：", ""]
     html_rows: list[str] = []
-    for row in alerts:
-        label = DIRECTION_LABELS.get(row.direction, row.direction)
-        title = f"{row.symbol} {row.name}".strip()
-        detail = (
-            f"现价 {row.triggered_price:.2f} 元，已{label}你设置的目标价 {float(row.target_price):.2f} 元"
-        )
-        link = _app_url(f"/stock/{row.symbol}")
+    for alert in alerts:
+        title = f"{alert.symbol} {alert.name}".strip()
+        detail = _alert_detail(alert)
+        link = _app_url(f"/stock/{alert.symbol}")
         lines.append(f"- {title}：{detail}")
         if link:
             lines.append(f"  {link}")
@@ -246,9 +342,9 @@ async def _send_alert_mail(user_id: object, alerts: list[PriceAlert], now: datet
             f'<a href="{html.escape(link)}" style="color:#16181D;text-decoration:none;">'
             f"{html.escape(title)}</a></td>"
             f'<td align="right" style="font-size:12px;color:#8A9099;">'
-            f"{html.escape(label)} {float(row.target_price):.2f}</td></tr>"
+            f"{html.escape(_alert_target_label(alert))}</td></tr>"
             '<tr><td colspan="2" style="padding-top:4px;font-size:12px;color:#5A6069;">'
-            f"触发时现价 {row.triggered_price:.2f} 元 · {now.strftime('%H:%M')}</td></tr>"
+            f"触发时现价 {alert.triggered_price:.2f} 元 · {now.strftime('%H:%M')}</td></tr>"
             "</table></td></tr>"
         )
     lines.append("")
@@ -275,15 +371,59 @@ async def _send_alert_mail(user_id: object, alerts: list[PriceAlert], now: datet
         + '<tr><td style="padding-top:24px;border-top:1px solid #E6E8EB;'
         'font-size:12px;color:#8A9099;line-height:1.7;">'
         "以上提醒由你自行设置，仅供研究参考，不构成投资建议。<br />"
-        "提醒在自选股卡片上管理，触发后不会重复通知。</td></tr>"
+        "提醒在自选股卡片上管理，触发一次后自动结束，不会重复通知。</td></tr>"
         "</table></td></tr></table></td></tr></table></body></html>"
     )
 
-    await send_email(
-        to=recipient,
-        subject=subject,
-        text=text_body,
-        html=html_body,
-        console_detail=f"price_alerts user={user_id}",
-    )
-    return True
+    email_ok = False
+    webhook_ok = False
+    if email_ready:
+        try:
+            await send_email(
+                to=recipient,
+                subject=subject,
+                text=text_body,
+                html=html_body,
+                console_detail=f"price_alerts user={user_id}",
+            )
+            email_ok = True
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("价位提醒邮件发送失败 user=%s: %s", user_id, exc)
+    if webhook_ready:
+        try:
+            await send_webhook(
+                url=webhook_url,
+                kind=webhook_type or "dingtalk",
+                keyword=webhook_keyword,
+                title=subject,
+                text=text_body,
+            )
+            webhook_ok = True
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("价位提醒 Webhook 发送失败 user=%s: %s", user_id, exc)
+    return email_ok, webhook_ok
+
+
+def _alert_target_label(alert: PriceAlert) -> str:
+    kind = alert.kind or "custom"
+    price = float(alert.target_price)
+    if kind == "entry":
+        return f"入场 ≤ {price:.2f}"
+    if kind == "take_profit":
+        return f"止盈 ≥ {price:.2f}"
+    if kind == "stop_loss":
+        return f"止损 ≤ {price:.2f}"
+    return f"{DIRECTION_LABELS.get(alert.direction, alert.direction)} {price:.2f}"
+
+
+def _alert_detail(alert: PriceAlert) -> str:
+    price = float(alert.target_price)
+    kind = alert.kind or "custom"
+    if kind == "entry":
+        return f"现价 {alert.triggered_price:.2f} 元，已回到你设置的入场价 {price:.2f} 元"
+    if kind == "take_profit":
+        return f"现价 {alert.triggered_price:.2f} 元，已达到你设置的止盈价 {price:.2f} 元"
+    if kind == "stop_loss":
+        return f"现价 {alert.triggered_price:.2f} 元，已跌破你设置的止损价 {price:.2f} 元"
+    label = DIRECTION_LABELS.get(alert.direction, alert.direction)
+    return f"现价 {alert.triggered_price:.2f} 元，已{label}你设置的目标价 {price:.2f} 元"

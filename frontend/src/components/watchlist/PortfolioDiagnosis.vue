@@ -3,14 +3,35 @@ import { onMounted, ref } from 'vue'
 
 import { watchlistApi, type PortfolioDiagnosis } from '@/api/watchlist'
 import { getErrorMessage } from '@/utils/errors'
+import { datedFilename, exportElementToPdf } from '@/utils/pdf'
 import { formatFullDateTime } from '@/utils/report'
 import PortfolioDiagnosisReport from './PortfolioDiagnosisReport.vue'
+import { exportPortfolioCsv } from './portfolioExport'
 
 const loading = ref(false)
 const error = ref('')
 const diagnosis = ref<PortfolioDiagnosis | null>(null)
 const hasHistory = ref(false)
 const expanded = ref(false)
+const reportRoot = ref<HTMLElement | null>(null)
+const pdfBusy = ref(false)
+const exportError = ref('')
+
+async function exportPdf(): Promise<void> {
+  if (!reportRoot.value || !diagnosis.value || pdfBusy.value) return
+  pdfBusy.value = true
+  exportError.value = ''
+  try {
+    await exportElementToPdf(
+      reportRoot.value,
+      datedFilename('智盈AI_组合诊断', diagnosis.value.generated_at),
+    )
+  } catch (err) {
+    exportError.value = getErrorMessage(err, 'PDF 导出失败，请稍后重试')
+  } finally {
+    pdfBusy.value = false
+  }
+}
 
 async function restoreLatest(): Promise<void> {
   try {
@@ -62,14 +83,30 @@ onMounted(() => {
         </p>
       </div>
       <div class="flex shrink-0 items-center gap-3">
-        <button
-          v-if="diagnosis && expanded"
-          type="button"
-          class="text-xs text-ink-3 transition-colors hover:text-ink"
-          @click="expanded = false"
-        >
-          收起
-        </button>
+        <template v-if="diagnosis && expanded">
+          <button
+            type="button"
+            class="text-xs text-ink-3 transition-colors hover:text-ink"
+            @click="exportPortfolioCsv(diagnosis)"
+          >
+            导出 CSV
+          </button>
+          <button
+            type="button"
+            class="text-xs text-ink-3 transition-colors hover:text-ink disabled:opacity-50"
+            :disabled="pdfBusy"
+            @click="exportPdf"
+          >
+            {{ pdfBusy ? '导出中…' : '导出 PDF' }}
+          </button>
+          <button
+            type="button"
+            class="text-xs text-ink-3 transition-colors hover:text-ink"
+            @click="expanded = false"
+          >
+            收起
+          </button>
+        </template>
         <RouterLink
           v-if="hasHistory"
           to="/reports?tab=portfolio"
@@ -110,16 +147,15 @@ onMounted(() => {
       {{ error }}
     </div>
 
-    <PortfolioDiagnosisReport
-      v-else-if="diagnosis && expanded"
-      class="mt-4"
-      :diagnosis="diagnosis"
-    />
+    <template v-else-if="diagnosis">
+      <div v-if="expanded" ref="reportRoot">
+        <PortfolioDiagnosisReport class="mt-4" :diagnosis="diagnosis" />
+      </div>
 
-    <div
-      v-else-if="diagnosis"
-      class="mt-4 flex flex-wrap items-center gap-x-4 gap-y-2 rounded-md bg-surface px-4 py-3"
-    >
+      <div
+        v-else
+        class="mt-4 flex flex-wrap items-center gap-x-4 gap-y-2 rounded-md bg-surface px-4 py-3"
+      >
       <div class="flex items-baseline gap-1">
         <span class="text-[24px] font-semibold leading-none tabular-nums text-ink">
           {{ diagnosis.health_score }}
@@ -143,6 +179,9 @@ onMounted(() => {
       >
         展开详情
       </button>
-    </div>
+      </div>
+    </template>
+
+    <p v-if="exportError" class="mt-2 text-xs text-danger">{{ exportError }}</p>
   </section>
 </template>

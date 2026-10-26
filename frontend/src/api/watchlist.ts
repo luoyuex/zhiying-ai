@@ -100,12 +100,16 @@ export interface PositionChangeEntry {
   created_at: string
 }
 
+export type PriceAlertKind = 'custom' | 'entry' | 'take_profit' | 'stop_loss'
+
 export interface PriceAlert {
   id: string
   symbol: string
   name: string
   direction: 'above' | 'below'
   target_price: number
+  kind: PriceAlertKind
+  report_id: string | null
   status: 'active' | 'triggered' | 'cancelled'
   triggered_price: number | null
   triggered_at: string | null
@@ -173,8 +177,20 @@ export const watchlistApi = {
 
   createAlert(symbol: string, direction: 'above' | 'below', targetPrice: number) {
     return http.post<PriceAlert>(`/watchlist/${encodeURIComponent(symbol)}/alerts`, {
+      kind: 'custom',
       direction,
       target_price: targetPrice,
+    })
+  },
+
+  createReportAlert(
+    symbol: string,
+    kind: Exclude<PriceAlertKind, 'custom'>,
+    reportId: string,
+  ) {
+    return http.post<PriceAlert>(`/watchlist/${encodeURIComponent(symbol)}/alerts`, {
+      kind,
+      report_id: reportId,
     })
   },
 

@@ -13,6 +13,16 @@ export async function exportElementToPdf(
     hidden.push({ node, display: node.style.display })
     node.style.display = 'none'
   })
+  const expanded: { node: HTMLElement; maxHeight: string; overflow: string }[] = []
+  element.querySelectorAll<HTMLElement>('[data-pdf-expand]').forEach((node) => {
+    expanded.push({
+      node,
+      maxHeight: node.style.maxHeight,
+      overflow: node.style.overflow,
+    })
+    node.style.maxHeight = 'none'
+    node.style.overflow = 'visible'
+  })
 
   try {
     const [{ default: html2canvas }, { jsPDF }] = await Promise.all([
@@ -60,6 +70,10 @@ export async function exportElementToPdf(
     hidden.forEach(({ node, display }) => {
       node.style.display = display
     })
+    expanded.forEach(({ node, maxHeight, overflow }) => {
+      node.style.maxHeight = maxHeight
+      node.style.overflow = overflow
+    })
   }
 }
 
@@ -72,4 +86,16 @@ export function pdfFilename(name: string, symbol: string, createdAt: string): st
       ).padStart(2, '0')}`
   const safeName = name.replace(/[\\/:*?"<>|]/g, '').trim() || symbol
   return `智盈AI_${safeName}_${symbol}_${stamp}.pdf`
+}
+
+/** 通用日期文件名：prefix_YYYYMMDD.ext（用于选股、组合诊断等无股票代码的导出）。 */
+export function datedFilename(prefix: string, createdAt: string, ext = 'pdf'): string {
+  const date = new Date(createdAt)
+  const stamp = Number.isNaN(date.getTime())
+    ? 'export'
+    : `${date.getFullYear()}${String(date.getMonth() + 1).padStart(2, '0')}${String(
+        date.getDate(),
+      ).padStart(2, '0')}`
+  const safePrefix = prefix.replace(/[\\/:*?"<>|]/g, '').trim() || '智盈AI'
+  return `${safePrefix}_${stamp}.${ext}`
 }

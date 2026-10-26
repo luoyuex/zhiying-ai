@@ -3,6 +3,7 @@ import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 
 import type { ScreenerRecordDetail } from '@/api/screener'
 import { formatFullDateTime } from '@/utils/report'
+import { exportScreenerCsv } from './screenerExport'
 import { strategyMeta } from './strategy'
 
 const props = defineProps<{
@@ -93,6 +94,14 @@ function close(): void {
   emit('close')
 }
 
+function exportCsv(): void {
+  if (!props.record) return
+  exportScreenerCsv(
+    props.record.result,
+    strategyMeta(props.record.strategy).name,
+  )
+}
+
 function onKeydown(event: KeyboardEvent): void {
   if (event.key === 'Escape' && props.open) close()
 }
@@ -153,6 +162,14 @@ onBeforeUnmount(() => {
               选股时间 {{ formatFullDateTime(record.created_at) }}
             </p>
           </div>
+          <button
+            v-if="record"
+            type="button"
+            class="h-8 shrink-0 rounded-md border border-line-strong bg-canvas px-2.5 text-[11px] text-ink-2 transition-colors hover:border-ink-3 hover:text-ink"
+            @click="exportCsv"
+          >
+            导出 CSV
+          </button>
           <button
             ref="closeButtonRef"
             type="button"

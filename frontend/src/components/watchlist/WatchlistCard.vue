@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed, ref, watch } from 'vue'
 
 import {
   watchlistApi,
@@ -9,6 +9,10 @@ import {
   type WatchlistJobState,
 } from '@/api/watchlist'
 import { automationApi } from '@/api/automation'
+import {
+  notifyPriceAlertsChanged,
+  usePriceAlertsVersion,
+} from '@/composables/usePriceAlertsSync'
 import { useAuthStore } from '@/stores/auth'
 import { getErrorMessage } from '@/utils/errors'
 import { formatSourceList } from '@/utils/market'
@@ -47,9 +51,11 @@ const alertError = ref('')
 const alertDirection = ref<'above' | 'below'>('above')
 const alertPriceInput = ref('')
 const alertSaving = ref(false)
-// 统一通知设置：打开提醒面板时按需加载实际收件地址
+// 统一通知设置：打开提醒面板时按需加载实际收件地址与 Webhook 状态
 const notifyTarget = ref<string | null>(null)
+const webhookReady = ref(false)
 const notifyLoaded = ref(false)
+const alertVersion = usePriceAlertsVersion()
 const auth = useAuthStore()
 
 const metaParts = computed(() => {
@@ -124,6 +130,23 @@ function directionLabel(direction: string): string {
   return direction === 'above' ? '涨到' : '跌破'
 }
 
+function alertLabel(alert: PriceAlert): string {
+  if (alert.kind === 'entry') return '入场'
+  if (alert.kind === 'take_profit') return '止盈'
+  if (alert.kind === 'stop_loss') return '止损'
+  return directionLabel(alert.direction)
+}
+
+function alertThreshold(alert: PriceAlert): string {
+  if (alert.kind === 'entry' || alert.kind === 'stop_loss') {
+    return `≤ ${alert.target_price.toFixed(2)}`
+  }
+  if (alert.kind === 'take_profit') {
+    return `≥ ${alert.target_price.toFixed(2)}`
+  }
+  return alert.target_price.toFixed(2)
+}
+
 const symbolAlerts = computed(() =>
   (alerts.value ?? []).filter((alert) => alert.symbol === props.item.symbol),
 )
@@ -160,9 +183,13 @@ async function loadNotifyTarget(): Promise<void> {
     notifyTarget.value = data.price_alert_email_enabled
       ? data.notify_email || auth.user?.email || null
       : null
+    webhookReady.value = Boolean(
+      data.price_alert_webhook_enabled && data.webhook_url,
+    )
   } catch {
-    // 设置加载失败时不在卡片上展示收件地址提示
+    // 设置加载失败时不在卡片上展示通知渠道提示
     notifyTarget.value = null
+    webhookReady.value = false
   } finally {
     notifyLoaded.value = true
   }
@@ -189,7 +216,7 @@ async function saveAlert(): Promise<void> {
   try {
     await watchlistApi.createAlert(props.item.symbol, alertDirection.value, price)
     alertPriceInput.value = ''
-    await refreshAlerts()
+    notifyPriceAlertsChanged()
   } catch (err) {
     alertError.value = getErrorMessage(err, '提醒创建失败')
   } finally {
@@ -200,11 +227,16 @@ async function saveAlert(): Promise<void> {
 async function removeAlert(id: string): Promise<void> {
   try {
     await watchlistApi.cancelAlert(id)
-    await refreshAlerts()
+    notifyPriceAlertsChanged()
   } catch (err) {
     alertError.value = getErrorMessage(err, '取消失败')
   }
 }
+
+// 其它位置（汇总面板 / 报告页）修改提醒后，已展开的面板同步刷新
+watch(alertVersion, () => {
+  if (alertPanelOpen.value) void refreshAlerts()
+})
 
 async function toggleHistory(): Promise<void> {
   historyOpen.value = !historyOpen.value
@@ -450,14 +482,18 @@ async function saveEdit(): Promise<void> {
       <div v-if="alertPanelOpen" class="mt-2 space-y-2 rounded-md bg-surface px-2.5 py-2">
         <div class="flex items-center justify-between gap-2">
           <span class="text-[11px] font-medium text-ink">价位提醒</span>
-          <span class="text-[10px] text-ink-3">交易时段内检查，触发后通知一次</span>
+          <span class="text-[10px] text-ink-3">交易时段内检查，触发一次后自动结束</span>
         </div>
         <p v-if="notifyLoaded" class="text-[10px] leading-relaxed text-ink-3">
-          <template v-if="notifyTarget">
-            触发后将发送邮件至 {{ notifyTarget }}（个人中心 → 定时与通知 可改）
+          <template v-if="notifyTarget || webhookReady">
+            触发后
+            <template v-if="notifyTarget">发送邮件至 {{ notifyTarget }}</template>
+            <template v-if="notifyTarget && webhookReady">，</template>
+            <template v-if="webhookReady">同时发送 Webhook</template>
+            （个人中心 → 定时与通知 可改）
           </template>
           <template v-else>
-            价位提醒邮件已关闭，触发记录仍会保留；可在个人中心 → 定时与通知 开启
+            价位提醒通知已关闭，触发记录仍会保留；可在个人中心 → 定时与通知 开启
           </template>
         </p>
         <p v-if="alertsLoading" class="text-[11px] text-ink-3">加载中…</p>
@@ -469,8 +505,8 @@ async function saveEdit(): Promise<void> {
               class="flex items-center justify-between gap-2 text-[11px]"
             >
               <span class="text-ink-2">
-                {{ directionLabel(alert.direction) }}
-                <span class="tabular-nums">{{ alert.target_price.toFixed(2) }}</span>
+                {{ alertLabel(alert) }}
+                <span class="tabular-nums">{{ alertThreshold(alert) }}</span>
               </span>
               <button
                 type="button"
@@ -491,8 +527,8 @@ async function saveEdit(): Promise<void> {
               class="flex items-center justify-between gap-2 text-[11px] text-ink-2"
             >
               <span>
-                {{ directionLabel(alert.direction) }}
-                {{ alert.target_price.toFixed(2) }} · 触发价
+                {{ alertLabel(alert) }}
+                {{ alertThreshold(alert) }} · 触发价
                 {{ alert.triggered_price === null ? '—' : alert.triggered_price.toFixed(2) }}
               </span>
               <span class="shrink-0 text-ink-3">

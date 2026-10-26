@@ -117,7 +117,14 @@ watch(
             :aria-expanded="menuOpen"
             @click="menuOpen = !menuOpen"
           >
+            <img
+              v-if="auth.user?.avatar_url"
+              :src="auth.user.avatar_url"
+              alt=""
+              class="size-8 shrink-0 rounded-full object-cover"
+            />
             <span
+              v-else
               class="flex size-8 shrink-0 items-center justify-center rounded-full bg-primary-soft text-[13px] font-semibold text-primary"
             >
               {{ avatarText }}
@@ -151,7 +158,14 @@ watch(
               aria-label="用户菜单"
             >
               <div class="flex items-center gap-3 border-b border-line px-4 py-3">
+                <img
+                  v-if="auth.user?.avatar_url"
+                  :src="auth.user.avatar_url"
+                  alt=""
+                  class="size-10 shrink-0 rounded-full object-cover"
+                />
                 <span
+                  v-else
                   class="flex size-10 shrink-0 items-center justify-center rounded-full bg-primary-soft text-sm font-semibold text-primary"
                 >
                   {{ avatarText }}

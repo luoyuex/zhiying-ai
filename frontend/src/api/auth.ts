@@ -38,6 +38,14 @@ export const authApi = {
     return http.patch<User>('/auth/me', payload)
   },
 
+  uploadAvatar(data: string) {
+    return http.post<User>('/auth/me/avatar', { data })
+  },
+
+  removeAvatar() {
+    return http.delete<User>('/auth/me/avatar')
+  },
+
   changePassword(payload: { current_password: string; new_password: string }) {
     return http.post<{ ok: boolean; message: string }>(
       '/auth/password/change',

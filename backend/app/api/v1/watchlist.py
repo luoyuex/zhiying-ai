@@ -41,6 +41,7 @@ from app.services.portfolio_service import PortfolioEmptyError, diagnose_portfol
 from app.services.price_alert_service import (
     MAX_ACTIVE_ALERTS_PER_USER,
     PriceAlertLimitError,
+    PriceAlertReportError,
     cancel_alert,
     create_alert,
     list_alerts,
@@ -231,9 +232,13 @@ async def create_price_alert(
             symbol,
             direction=payload.direction,
             target_price=payload.target_price,
+            kind=payload.kind,
+            report_id=payload.report_id,
         )
     except InvalidSymbolError as exc:
         raise errors.invalid_symbol(str(exc)) from exc
+    except PriceAlertReportError as exc:
+        raise errors.validation(str(exc)) from exc
     except PriceAlertLimitError as exc:
         raise errors.price_alert_limit(MAX_ACTIVE_ALERTS_PER_USER) from exc
 

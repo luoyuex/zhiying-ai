@@ -4,6 +4,84 @@
 
 ---
 
+## 2026-10-25 · A 包：Webhook、报告价位提醒、导出与头像
+
+### 本次更新
+
+**通知与提醒**
+
+- **Webhook 通知**：个人中心「定时与通知」新增钉钉/飞书机器人配置（类型、地址、关键词）；定时任务汇总与关键价位提醒各有 Webhook 开关，可与邮件同时发送。只允许官方 https 域名；发送失败只记日志，不影响任务与提醒记录。
+- **报告价位一键提醒**：报告详情「首席策略官」价位区新增「入场 ≤ / 止盈 ≥ / 止损 ≤」按钮，按报告价位自动确定方向与目标价；同股同类型只保留一条生效提醒，重复设置会更新原提醒。
+- **跨股票提醒列表**：自选页新增「价位提醒」面板，汇总所有生效中与最近触发的提醒，不要求股票在自选列表。
+
+**导出与账号**
+
+- **选股导出**：AI 精选结果与历史详情支持 CSV；AI 精选结果支持 PDF（导出时展开分析师全文）。
+- **组合诊断导出**：自选页与历史详情支持 CSV/PDF。
+- **头像**：个人中心支持上传/更换/移除头像；前端裁剪压缩为 256×256 JPEG，后端校验格式与大小后存 PostgreSQL。
+
+### 影响范围
+
+| 项目 | 说明 |
+| --- | --- |
+| 数据库 | 1 个迁移：`e1f2a3b4c5d6`（Webhook 配置、提醒类型/报告关联、头像表与版本号）；目标 head `e1f2a3b4c5d6` |
+| 后端 API | 新增 `/auth/me/avatar`、`/auth/avatar/{user_id}`；价位提醒创建支持 `kind`/`report_id`；定时设置新增 Webhook 字段 |
+| 后端 worker | 定时汇总与价位提醒增加 Webhook 发送逻辑，**必须重启 worker** |
+| 前端 | 个人中心通知配置、头像；报告价位提醒；自选页提醒列表；选股/组合诊断导出；需要重新构建 |
+| 依赖 | 无新增 Python / npm 依赖 |
+
+### 更新前确认
+
+- 钉钉/飞书机器人地址需使用官方域名：`oapi.dingtalk.com`、`open.feishu.cn` 或 `open.larksuite.com`。
+- 飞书若开启签名校验，当前不支持；请改用关键词或 IP 白名单。
+- 本次没有新增 `.env` 配置项。
+
+### 服务器更新步骤
+
+按顺序执行，方括号内为执行身份。
+
+#### 1. 备份数据库 `[zhiying]`
+
+```bash
+cd /opt/zhiying-ai
+docker compose exec -T postgres pg_dump -U zhiying -d zhiying -Fc \
+  | gzip > /var/backups/zhiying/zhiying-$(date +%F-%H%M).dump.gz
+```
+
+#### 2. 拉代码、装依赖、构建前端 `[zhiying]`
+
+```bash
+cd /opt/zhiying-ai
+git pull --ff-only
+
+cd /opt/zhiying-ai/backend
+~/.local/bin/uv sync --frozen --no-dev --python 3.12
+~/.local/bin/uv run alembic upgrade head
+
+cd /opt/zhiying-ai/frontend
+npm ci
+npm run build
+```
+
+#### 3. 重启 API 与 worker `[zhiying]`
+
+```bash
+sudo systemctl restart zhiying-api
+sudo systemctl restart zhiying-worker
+```
+
+#### 4. 更新后检查
+
+```bash
+curl -s https://你的域名/health
+sudo systemctl status zhiying-api --no-pager
+sudo systemctl status zhiying-worker --no-pager
+```
+
+个人中心 → 定时与通知中填写 Webhook 并保存；报告详情点击一次价位提醒按钮，自选页应出现对应提醒。
+
+---
+
 ## 2026-10-25 · 自选增强、统一通知与后台 P1/P2
 
 ### 本次更新

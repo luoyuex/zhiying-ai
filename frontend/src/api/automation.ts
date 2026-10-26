@@ -23,6 +23,11 @@ export interface AutomationSettings {
   email_notify_enabled: boolean
   price_alert_email_enabled: boolean
   notify_email: string | null
+  webhook_notify_enabled: boolean
+  price_alert_webhook_enabled: boolean
+  webhook_type: 'dingtalk' | 'feishu'
+  webhook_url: string | null
+  webhook_keyword: string | null
   updated_at: string | null
 }
 
@@ -37,6 +42,11 @@ export interface AutomationSettingsUpdate {
   email_notify_enabled: boolean
   price_alert_email_enabled: boolean
   notify_email: string | null
+  webhook_notify_enabled: boolean
+  price_alert_webhook_enabled: boolean
+  webhook_type: 'dingtalk' | 'feishu'
+  webhook_url: string | null
+  webhook_keyword: string | null
 }
 
 export const automationApi = {

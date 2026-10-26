@@ -1,10 +1,11 @@
 """自选股接口模型。"""
 
+import uuid
 from datetime import datetime
 from enum import StrEnum
 from typing import Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 
 class LatestAnalysis(BaseModel):
@@ -85,9 +86,24 @@ class PriceAlertDirection(StrEnum):
     BELOW = "below"
 
 
+PriceAlertKind = Literal["custom", "entry", "take_profit", "stop_loss"]
+
+
 class PriceAlertCreateRequest(BaseModel):
-    direction: Literal["above", "below"]
-    target_price: float = Field(gt=0)
+    # custom：手动涨到/跌破；其余类型由报告价位自动决定方向与目标价
+    kind: PriceAlertKind = "custom"
+    direction: Literal["above", "below"] | None = None
+    target_price: float | None = Field(default=None, gt=0)
+    report_id: uuid.UUID | None = None
+
+    @model_validator(mode="after")
+    def require_fields(self) -> "PriceAlertCreateRequest":
+        if self.kind == "custom":
+            if self.direction is None or self.target_price is None:
+                raise ValueError("自定义提醒必须填写方向和目标价")
+        elif self.report_id is None:
+            raise ValueError("从报告价位创建提醒时必须提供 report_id")
+        return self
 
 
 class PriceAlertView(BaseModel):
@@ -96,6 +112,8 @@ class PriceAlertView(BaseModel):
     name: str
     direction: str
     target_price: float
+    kind: str = "custom"
+    report_id: str | None = None
     status: str
     triggered_price: float | None = None
     triggered_at: datetime | None = None

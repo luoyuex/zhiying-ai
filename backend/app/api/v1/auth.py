@@ -1,13 +1,17 @@
+import uuid
+
 from fastapi import APIRouter, Cookie, Depends, Request, Response
 from redis.asyncio import Redis
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core import errors
 from app.core.config import settings
 from app.core.deps import get_current_user, get_db
 from app.db.models.user import User
 from app.db.redis import get_redis
 from app.schemas.auth import (
     AuthResponse,
+    AvatarUploadRequest,
     ChangePasswordRequest,
     CodeLoginRequest,
     LoginRequest,
@@ -20,7 +24,7 @@ from app.schemas.auth import (
     UpdateProfileRequest,
     UserOut,
 )
-from app.services import auth_service
+from app.services import auth_service, avatar_service
 from app.services.mail_service import send_otp_email
 from app.services.otp_service import OtpService
 
@@ -184,6 +188,50 @@ async def update_me(
 ) -> UserOut:
     updated = await auth_service.update_profile(db, user, payload.nickname)
     return UserOut.model_validate(updated)
+
+
+@router.post("/me/avatar", response_model=UserOut, summary="上传或替换头像")
+async def upload_avatar(
+    payload: AvatarUploadRequest,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> UserOut:
+    try:
+        await avatar_service.save_avatar(user.id, payload.data)
+    except avatar_service.AvatarInvalidError as exc:
+        raise errors.validation(str(exc)) from exc
+    updated = await db.get(User, user.id)
+    if updated is not None:
+        await db.refresh(updated)
+    return UserOut.model_validate(updated or user)
+
+
+@router.delete("/me/avatar", response_model=UserOut, summary="移除头像")
+async def remove_avatar(
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> UserOut:
+    await avatar_service.delete_avatar(user.id)
+    updated = await db.get(User, user.id)
+    if updated is not None:
+        await db.refresh(updated)
+    return UserOut.model_validate(updated or user)
+
+
+@router.get("/avatar/{user_id}", include_in_schema=False)
+async def get_avatar(user_id: uuid.UUID) -> Response:
+    avatar = await avatar_service.get_avatar(user_id)
+    if avatar is None:
+        raise errors.not_found("头像不存在")
+    data, content_type = avatar
+    return Response(
+        content=data,
+        media_type=content_type,
+        headers={
+            "Cache-Control": "private, no-cache",
+            "X-Content-Type-Options": "nosniff",
+        },
+    )
 
 
 @router.post("/password/change", response_model=OkResponse, summary="修改密码")

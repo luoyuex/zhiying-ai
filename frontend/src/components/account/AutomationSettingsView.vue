@@ -32,6 +32,11 @@ const formValues = ref<Record<string, Record<string, number | boolean | string |
 const emailNotifyEnabled = ref(false)
 const priceAlertEmailEnabled = ref(true)
 const notifyEmail = ref('')
+const webhookNotifyEnabled = ref(false)
+const priceAlertWebhookEnabled = ref(true)
+const webhookType = ref<'dingtalk' | 'feishu'>('dingtalk')
+const webhookUrl = ref('')
+const webhookKeyword = ref('')
 const screenerExpanded = ref(false)
 
 const screenerSummary = computed(() => {
@@ -83,6 +88,25 @@ function applySettings(data: AutomationSettings): void {
   emailNotifyEnabled.value = data.email_notify_enabled
   priceAlertEmailEnabled.value = data.price_alert_email_enabled
   notifyEmail.value = data.notify_email || auth.user?.email || ''
+  webhookNotifyEnabled.value = data.webhook_notify_enabled
+  priceAlertWebhookEnabled.value = data.price_alert_webhook_enabled
+  webhookType.value = data.webhook_type === 'feishu' ? 'feishu' : 'dingtalk'
+  webhookUrl.value = data.webhook_url || ''
+  webhookKeyword.value = data.webhook_keyword || ''
+}
+
+function webhookHostAllowed(url: string): boolean {
+  try {
+    const parsed = new URL(url)
+    return (
+      parsed.protocol === 'https:' &&
+      ['oapi.dingtalk.com', 'open.feishu.cn', 'open.larksuite.com'].includes(
+        parsed.hostname,
+      )
+    )
+  } catch {
+    return false
+  }
 }
 
 onMounted(async () => {
@@ -103,6 +127,15 @@ async function save(): Promise<void> {
   success.value = ''
   if (emailNotifyEnabled.value && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(notifyEmail.value.trim())) {
     error.value = '请填写有效的邮件接收地址'
+    return
+  }
+  const webhookUrlValue = webhookUrl.value.trim()
+  if (webhookNotifyEnabled.value && !webhookUrlValue) {
+    error.value = '开启 Webhook 通知时必须填写机器人地址'
+    return
+  }
+  if (webhookUrlValue && !webhookHostAllowed(webhookUrlValue)) {
+    error.value = 'Webhook 只支持钉钉或飞书官方 https 机器人地址'
     return
   }
   saving.value = true
@@ -128,6 +161,11 @@ async function save(): Promise<void> {
       email_notify_enabled: emailNotifyEnabled.value,
       price_alert_email_enabled: priceAlertEmailEnabled.value,
       notify_email: notifyEmail.value.trim() || null,
+      webhook_notify_enabled: webhookNotifyEnabled.value,
+      price_alert_webhook_enabled: priceAlertWebhookEnabled.value,
+      webhook_type: webhookType.value,
+      webhook_url: webhookUrlValue || null,
+      webhook_keyword: webhookKeyword.value.trim() || null,
     })
     applySettings(data)
     success.value = '定时任务设置已保存'
@@ -311,41 +349,67 @@ async function save(): Promise<void> {
         <div>
           <span class="block text-[13px] font-medium text-ink">消息通知</span>
           <span class="mt-0.5 block text-[11px] text-ink-3">
-            定时任务汇总与价位提醒共用邮件设置；关闭后任务和提醒照常执行，只是不发送邮件
+            定时汇总与价位提醒可分别选择邮件、Webhook 或两者同时发送；关闭渠道不影响任务与提醒记录
           </span>
         </div>
 
-        <label class="mt-4 flex cursor-pointer items-center justify-between gap-4 border-t border-line pt-3">
-          <span>
-            <span class="block text-[12px] font-medium text-ink">定时任务结果汇总</span>
-            <span class="mt-0.5 block text-[11px] text-ink-3">
-              每天任务跑完后，把选股与分析结果合并成一封
-            </span>
-          </span>
-          <input v-model="emailNotifyEnabled" type="checkbox" class="peer sr-only" />
-          <span
-            class="relative h-5 w-9 shrink-0 rounded-full bg-ink-3/30 transition-colors after:absolute after:left-0.5 after:top-0.5 after:size-4 after:rounded-full after:bg-white after:transition-transform peer-checked:bg-ink peer-checked:after:translate-x-4"
-            aria-hidden="true"
-          />
-        </label>
+        <div class="mt-4 border-t border-line pt-3">
+          <div class="grid grid-cols-[1fr_auto_auto] items-center gap-x-4 text-[10px] text-ink-3">
+            <span>事件</span>
+            <span class="w-9 text-center">邮件</span>
+            <span class="w-9 text-center">Webhook</span>
+          </div>
 
-        <label class="mt-3 flex cursor-pointer items-center justify-between gap-4 border-t border-line pt-3">
-          <span>
-            <span class="block text-[12px] font-medium text-ink">价位提醒</span>
-            <span class="mt-0.5 block text-[11px] text-ink-3">
-              自选股设置的目标价触发时发送邮件（默认开启）
+          <div class="mt-2 grid grid-cols-[1fr_auto_auto] items-center gap-x-4 border-t border-line pt-3">
+            <span>
+              <span class="block text-[12px] font-medium text-ink">定时任务结果汇总</span>
+              <span class="mt-0.5 block text-[11px] text-ink-3">
+                每天任务跑完后，把选股与分析结果合并发送
+              </span>
             </span>
-          </span>
-          <input v-model="priceAlertEmailEnabled" type="checkbox" class="peer sr-only" />
-          <span
-            class="relative h-5 w-9 shrink-0 rounded-full bg-ink-3/30 transition-colors after:absolute after:left-0.5 after:top-0.5 after:size-4 after:rounded-full after:bg-white after:transition-transform peer-checked:bg-ink peer-checked:after:translate-x-4"
-            aria-hidden="true"
-          />
-        </label>
+            <label class="flex w-9 justify-center">
+              <input v-model="emailNotifyEnabled" type="checkbox" class="peer sr-only" />
+              <span
+                class="relative block h-5 w-9 shrink-0 cursor-pointer rounded-full bg-ink-3/30 transition-colors after:absolute after:left-0.5 after:top-0.5 after:size-4 after:rounded-full after:bg-white after:transition-transform peer-checked:bg-ink peer-checked:after:translate-x-4"
+                aria-hidden="true"
+              />
+            </label>
+            <label class="flex w-9 justify-center">
+              <input v-model="webhookNotifyEnabled" type="checkbox" class="peer sr-only" />
+              <span
+                class="relative block h-5 w-9 shrink-0 cursor-pointer rounded-full bg-ink-3/30 transition-colors after:absolute after:left-0.5 after:top-0.5 after:size-4 after:rounded-full after:bg-white after:transition-transform peer-checked:bg-ink peer-checked:after:translate-x-4"
+                aria-hidden="true"
+              />
+            </label>
+          </div>
 
-        <div class="mt-3 border-t border-line pt-3">
+          <div class="mt-3 grid grid-cols-[1fr_auto_auto] items-center gap-x-4 border-t border-line pt-3">
+            <span>
+              <span class="block text-[12px] font-medium text-ink">关键价位提醒</span>
+              <span class="mt-0.5 block text-[11px] text-ink-3">
+                入场、止盈、止损或自定义目标价触发时发送（默认开启）
+              </span>
+            </span>
+            <label class="flex w-9 justify-center">
+              <input v-model="priceAlertEmailEnabled" type="checkbox" class="peer sr-only" />
+              <span
+                class="relative block h-5 w-9 shrink-0 cursor-pointer rounded-full bg-ink-3/30 transition-colors after:absolute after:left-0.5 after:top-0.5 after:size-4 after:rounded-full after:bg-white after:transition-transform peer-checked:bg-ink peer-checked:after:translate-x-4"
+                aria-hidden="true"
+              />
+            </label>
+            <label class="flex w-9 justify-center">
+              <input v-model="priceAlertWebhookEnabled" type="checkbox" class="peer sr-only" />
+              <span
+                class="relative block h-5 w-9 shrink-0 cursor-pointer rounded-full bg-ink-3/30 transition-colors after:absolute after:left-0.5 after:top-0.5 after:size-4 after:rounded-full after:bg-white after:transition-transform peer-checked:bg-ink peer-checked:after:translate-x-4"
+                aria-hidden="true"
+              />
+            </label>
+          </div>
+        </div>
+
+        <div class="mt-4 border-t border-line pt-3">
           <label class="flex flex-wrap items-center justify-between gap-3 text-[11px] text-ink-3">
-            <span>接收地址</span>
+            <span>邮件接收地址</span>
             <input
               v-model.trim="notifyEmail"
               type="email"
@@ -357,6 +421,45 @@ async function save(): Promise<void> {
           <p class="mt-2 text-[10px] leading-relaxed text-ink-3">
             定时任务汇总需填写地址；价位提醒留空时发送到账号邮箱（{{ auth.user?.email || '—' }}）。
             同一天同一项任务只发一封，多个结果合并发送。
+          </p>
+        </div>
+
+        <div class="mt-4 border-t border-line pt-3">
+          <div class="flex flex-wrap items-center justify-between gap-3 text-[11px] text-ink-3">
+            <span>Webhook 机器人</span>
+            <div class="flex flex-wrap items-center gap-2">
+              <select
+                v-model="webhookType"
+                class="rounded-md border border-line bg-canvas px-2 py-1.5 text-xs text-ink outline-none focus:border-ink-3"
+              >
+                <option value="dingtalk">钉钉</option>
+                <option value="feishu">飞书</option>
+              </select>
+              <input
+                v-model.trim="webhookUrl"
+                type="url"
+                autocomplete="off"
+                placeholder="https://oapi.dingtalk.com/robot/send?access_token=..."
+                class="w-72 max-w-full rounded-md border border-line bg-canvas px-2 py-1.5 text-xs text-ink outline-none focus:border-ink-3"
+              />
+            </div>
+          </div>
+          <label
+            v-if="webhookType === 'dingtalk'"
+            class="mt-2 flex flex-wrap items-center justify-between gap-3 text-[11px] text-ink-3"
+          >
+            <span>自定义关键词</span>
+            <input
+              v-model.trim="webhookKeyword"
+              type="text"
+              maxlength="64"
+              placeholder="机器人安全设置中的关键词（可选）"
+              class="w-72 max-w-full rounded-md border border-line bg-canvas px-2 py-1.5 text-xs text-ink outline-none focus:border-ink-3"
+            />
+          </label>
+          <p class="mt-2 text-[10px] leading-relaxed text-ink-3">
+            仅支持钉钉、飞书官方机器人地址。钉钉用“自定义关键词”校验时请填写关键词；
+            飞书若开启签名校验，当前不支持，请改用关键词或 IP 白名单。
           </p>
         </div>
       </section>

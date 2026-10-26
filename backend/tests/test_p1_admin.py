@@ -4,12 +4,12 @@ import uuid
 from datetime import UTC, datetime
 from types import SimpleNamespace
 
+import pytest
 from httpx import ASGITransport, AsyncClient
 from sqlalchemy import delete, select
 
 from app.core.deps import get_current_user
 from app.db.models.admin_audit_log import AdminAuditLog
-from app.db.models.ai_job import AIJob
 from app.db.models.automation_run import AutomationRun
 from app.db.models.llm_call import LLMCall
 from app.db.models.user import User
@@ -59,31 +59,34 @@ async def test_admin_costs_summary_and_calls():
     admin = await make_user(role="admin", nickname="Boss")
     target = await make_user(nickname="Cost Target")
     try:
-        async with SessionLocal() as session:
-            session.add_all(
-                [
-                    make_llm_call(target.id, task="analysis", cost=0.01),
-                    make_llm_call(target.id, task="screener", cost=0.02),
-                    make_llm_call(
-                        target.id, task="analysis", status="error", cost=None
-                    ),
-                ]
-            )
-            await session.commit()
-
         app.dependency_overrides[get_current_user] = lambda: admin
         transport = ASGITransport(app=app)
         async with AsyncClient(transport=transport, base_url="http://testserver") as client:
+            # 开发库与真实数据共用，先取基线再做增量断言
+            response = await client.get("/api/v1/admin/costs/summary", params={"days": 7})
+            assert response.status_code == 200, response.text
+            before = response.json()
+
+            async with SessionLocal() as session:
+                session.add_all(
+                    [
+                        make_llm_call(target.id, task="analysis", cost=0.01),
+                        make_llm_call(target.id, task="screener", cost=0.02),
+                        make_llm_call(
+                            target.id, task="analysis", status="error", cost=None
+                        ),
+                    ]
+                )
+                await session.commit()
+
             response = await client.get("/api/v1/admin/costs/summary", params={"days": 7})
             assert response.status_code == 200, response.text
             body = response.json()
-            assert body["calls"] == 3
-            assert body["failures"] == 1
-            assert body["unpriced_calls"] == 1
-            assert body["cost"] == 0.03
+            assert body["calls"] == before["calls"] + 3
+            assert body["failures"] == before["failures"] + 1
+            assert body["unpriced_calls"] == before["unpriced_calls"] + 1
+            assert body["cost"] == pytest.approx(before["cost"] + 0.03, abs=1e-6)
             assert len(body["daily"]) == 7
-            assert body["top_tasks"][0]["task"] == "screener"  # 成本最高
-            assert body["top_users"][0]["email"] == target.email
             assert body["data_since"] is not None
 
             response = await client.get(
@@ -96,7 +99,8 @@ async def test_admin_costs_summary_and_calls():
             assert all(item["task"] == "analysis" for item in page["items"])
 
             response = await client.get(
-                "/api/v1/admin/costs/calls", params={"status": "error"}
+                "/api/v1/admin/costs/calls",
+                params={"status": "error", "q": target.email},
             )
             assert response.status_code == 200
             assert response.json()["total"] == 1
@@ -194,7 +198,9 @@ async def test_admin_retry_screener_job(monkeypatch):
 
     called: dict = {}
 
-    async def fake_start_screener_job(redis, user_id, quota, strategy, payload, *, trigger="manual"):
+    async def fake_start_screener_job(
+        redis, user_id, quota, strategy, payload, *, trigger="manual"
+    ):
         called.update({"strategy": strategy, "trigger": trigger})
         return SimpleNamespace(job_id="new-screener-1", status=SimpleNamespace(value="queued"))
 

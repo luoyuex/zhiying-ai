@@ -32,6 +32,11 @@ def _to_response(row: AutomationSettings | None) -> AutomationSettingsResponse:
         email_notify_enabled=row.email_notify_enabled,
         price_alert_email_enabled=row.price_alert_email_enabled,
         notify_email=row.notify_email,
+        webhook_notify_enabled=row.webhook_notify_enabled,
+        price_alert_webhook_enabled=row.price_alert_webhook_enabled,
+        webhook_type=row.webhook_type,
+        webhook_url=row.webhook_url,
+        webhook_keyword=row.webhook_keyword,
         updated_at=row.updated_at,
     )
 
@@ -67,6 +72,11 @@ async def update_settings(
                 email_notify_enabled=payload.email_notify_enabled,
                 price_alert_email_enabled=payload.price_alert_email_enabled,
                 notify_email=payload.notify_email,
+                webhook_notify_enabled=payload.webhook_notify_enabled,
+                price_alert_webhook_enabled=payload.price_alert_webhook_enabled,
+                webhook_type=payload.webhook_type,
+                webhook_url=payload.webhook_url,
+                webhook_keyword=payload.webhook_keyword,
             )
             .on_conflict_do_update(
                 index_elements=[AutomationSettings.user_id],
@@ -81,6 +91,11 @@ async def update_settings(
                     "email_notify_enabled": payload.email_notify_enabled,
                     "price_alert_email_enabled": payload.price_alert_email_enabled,
                     "notify_email": payload.notify_email,
+                    "webhook_notify_enabled": payload.webhook_notify_enabled,
+                    "price_alert_webhook_enabled": payload.price_alert_webhook_enabled,
+                    "webhook_type": payload.webhook_type,
+                    "webhook_url": payload.webhook_url,
+                    "webhook_keyword": payload.webhook_keyword,
                     "updated_at": func.now(),
                 },
             )

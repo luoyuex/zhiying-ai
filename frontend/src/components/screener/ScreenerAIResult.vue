@@ -1,8 +1,11 @@
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, ref } from 'vue'
 
 import type { ScreenerAnalysisResponse, ScreenerStrategyId } from '@/api/screener'
+import { getErrorMessage } from '@/utils/errors'
+import { datedFilename, exportElementToPdf } from '@/utils/pdf'
 import { formatFullDateTime } from '@/utils/report'
+import { exportScreenerCsv } from './screenerExport'
 import { strategyMeta } from './strategy'
 
 const props = defineProps<{
@@ -11,16 +14,39 @@ const props = defineProps<{
 }>()
 
 const meta = computed(() => strategyMeta(props.strategy))
+const root = ref<HTMLElement | null>(null)
+const pdfBusy = ref(false)
+const exportError = ref('')
 
 const analystReports = computed(() => [
   { title: meta.value.fundFlow, content: props.analysis.fund_flow },
   { title: meta.value.industry, content: props.analysis.industry },
   { title: meta.value.fundamental, content: props.analysis.fundamental },
 ])
+
+function exportCsv(): void {
+  exportScreenerCsv(props.analysis, meta.value.name)
+}
+
+async function exportPdf(): Promise<void> {
+  if (!root.value || pdfBusy.value) return
+  pdfBusy.value = true
+  exportError.value = ''
+  try {
+    await exportElementToPdf(
+      root.value,
+      datedFilename(`智盈AI_${meta.value.name}`, props.analysis.generated_at),
+    )
+  } catch (err) {
+    exportError.value = getErrorMessage(err, 'PDF 导出失败，请稍后重试')
+  } finally {
+    pdfBusy.value = false
+  }
+}
 </script>
 
 <template>
-  <section class="space-y-4">
+  <section ref="root" class="space-y-4">
     <div class="rounded-lg border border-line bg-canvas p-4">
       <div class="flex flex-wrap items-end justify-between gap-3">
         <div>
@@ -48,11 +74,28 @@ const analystReports = computed(() => [
             <span>额度 {{ analysis.quota_used }} / {{ analysis.quota_limit }}</span>
           </p>
         </div>
-        <span
-          class="rounded-full bg-primary-soft px-2.5 py-1 text-[10px] font-medium text-primary"
-        >
-          资深研究员精选
-        </span>
+        <div class="flex flex-wrap items-center gap-2" data-pdf-hide>
+          <span
+            class="rounded-full bg-primary-soft px-2.5 py-1 text-[10px] font-medium text-primary"
+          >
+            资深研究员精选
+          </span>
+          <button
+            type="button"
+            class="h-7 rounded-md border border-line-strong bg-canvas px-2.5 text-[11px] text-ink-2 transition-colors hover:border-ink-3 hover:text-ink"
+            @click="exportCsv"
+          >
+            导出 CSV
+          </button>
+          <button
+            type="button"
+            class="h-7 rounded-md border border-line-strong bg-canvas px-2.5 text-[11px] text-ink-2 transition-colors hover:border-ink-3 hover:text-ink disabled:opacity-50"
+            :disabled="pdfBusy"
+            @click="exportPdf"
+          >
+            {{ pdfBusy ? '导出中…' : '导出 PDF' }}
+          </button>
+        </div>
       </div>
 
       <div v-if="analysis.recommendations.length" class="mt-3 space-y-2">
@@ -129,6 +172,7 @@ const analystReports = computed(() => [
           <div class="text-[11px] font-medium text-ink">{{ report.title }}</div>
           <p
             class="mt-1 max-h-72 overflow-y-auto whitespace-pre-line text-[11px] leading-relaxed text-ink-2"
+            data-pdf-expand
           >
             {{ report.content || '暂无内容' }}
           </p>
@@ -136,6 +180,9 @@ const analystReports = computed(() => [
       </div>
     </div>
 
+    <p v-if="exportError" class="text-[11px] text-danger" data-pdf-hide>
+      {{ exportError }}
+    </p>
     <p class="text-[10px] leading-relaxed text-ink-3">{{ analysis.disclaimer }}</p>
   </section>
 </template>

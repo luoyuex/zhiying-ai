@@ -11,6 +11,7 @@ import Button from '@/components/ui/Button.vue'
 import Input from '@/components/ui/Input.vue'
 import { useAuthStore } from '@/stores/auth'
 import type { User } from '@/types/auth'
+import { fileToAvatarDataUrl } from '@/utils/avatar'
 import { getErrorMessage } from '@/utils/errors'
 
 const open = defineModel<boolean>({ required: true })
@@ -34,6 +35,9 @@ const nicknameDraft = ref(auth.user?.nickname ?? '')
 const profileSaving = ref(false)
 const profileError = ref('')
 const profileSuccess = ref('')
+const avatarInput = ref<HTMLInputElement | null>(null)
+const avatarBusy = ref(false)
+const avatarError = ref('')
 
 const passwordCurrent = ref('')
 const passwordNew = ref('')
@@ -76,7 +80,7 @@ const viewMeta = computed(() => {
     return {
       eyebrow: 'PROFILE SETTINGS',
       title: '资料设置',
-      desc: '修改昵称与账号资料',
+      desc: '修改头像、昵称与账号资料',
     }
   }
   if (activeView.value === 'security') {
@@ -90,7 +94,7 @@ const viewMeta = computed(() => {
     return {
       eyebrow: 'AUTOMATION & NOTIFY',
       title: '定时与通知',
-      desc: '每日自动任务与邮件通知设置',
+      desc: '每日自动任务与消息通知设置',
     }
   }
   return {
@@ -147,10 +151,53 @@ function setView(view: AccountView): void {
   activeView.value = view
   profileError.value = ''
   profileSuccess.value = ''
+  avatarError.value = ''
   passwordError.value = ''
   passwordSuccess.value = ''
   if (view === 'profile') {
     nicknameDraft.value = profile.value?.nickname ?? ''
+  }
+}
+
+function pickAvatar(): void {
+  avatarInput.value?.click()
+}
+
+async function onAvatarSelected(event: Event): Promise<void> {
+  const input = event.target as HTMLInputElement
+  const file = input.files?.[0]
+  input.value = ''
+  if (!file || avatarBusy.value) return
+  avatarBusy.value = true
+  avatarError.value = ''
+  profileSuccess.value = ''
+  try {
+    const dataUrl = await fileToAvatarDataUrl(file)
+    const { data } = await authApi.uploadAvatar(dataUrl)
+    profile.value = data
+    auth.setUser(data)
+    profileSuccess.value = '头像已更新'
+  } catch (err) {
+    avatarError.value = getErrorMessage(err, '头像上传失败，请稍后重试')
+  } finally {
+    avatarBusy.value = false
+  }
+}
+
+async function removeAvatar(): Promise<void> {
+  if (avatarBusy.value) return
+  avatarBusy.value = true
+  avatarError.value = ''
+  profileSuccess.value = ''
+  try {
+    const { data } = await authApi.removeAvatar()
+    profile.value = data
+    auth.setUser(data)
+    profileSuccess.value = '头像已移除'
+  } catch (err) {
+    avatarError.value = getErrorMessage(err, '头像移除失败，请稍后重试')
+  } finally {
+    avatarBusy.value = false
   }
 }
 
@@ -253,6 +300,7 @@ watch(open, async (value) => {
     activeView.value = 'overview'
     profileError.value = ''
     profileSuccess.value = ''
+    avatarError.value = ''
     passwordError.value = ''
     passwordSuccess.value = ''
     nicknameDraft.value = profile.value?.nickname || auth.user?.nickname || ''
@@ -488,7 +536,14 @@ onBeforeUnmount(() => {
 
           <div class="min-h-0 flex-1 overflow-y-auto px-6 py-6">
             <div class="flex items-center gap-4">
+              <img
+                v-if="profile?.avatar_url"
+                :src="profile.avatar_url"
+                alt=""
+                class="size-14 shrink-0 rounded-full object-cover"
+              />
               <span
+                v-else
                 class="flex size-14 shrink-0 items-center justify-center rounded-full bg-primary-soft text-xl font-semibold text-primary"
               >
                 {{ avatarText }}
@@ -506,6 +561,47 @@ onBeforeUnmount(() => {
                 </div>
               </div>
             </div>
+
+            <template v-if="activeView === 'profile'">
+              <div class="mt-4 flex flex-wrap items-center gap-x-3 gap-y-1.5">
+                <button
+                  type="button"
+                  class="rounded-md bg-surface-2 px-2.5 py-1.5 text-xs font-medium text-ink transition-colors hover:bg-line disabled:opacity-50"
+                  :disabled="avatarBusy"
+                  @click="pickAvatar"
+                >
+                  {{
+                    avatarBusy
+                      ? '处理中…'
+                      : profile?.avatar_url
+                        ? '更换头像'
+                        : '上传头像'
+                  }}
+                </button>
+                <button
+                  v-if="profile?.avatar_url"
+                  type="button"
+                  class="px-1 py-1.5 text-xs text-ink-3 transition-colors hover:text-danger disabled:opacity-50"
+                  :disabled="avatarBusy"
+                  @click="removeAvatar"
+                >
+                  移除
+                </button>
+                <span class="text-[11px] text-ink-3">
+                  JPG、PNG 或 WebP，自动裁剪为方形小图
+                </span>
+              </div>
+              <p v-if="avatarError" class="mt-1 text-xs text-danger">
+                {{ avatarError }}
+              </p>
+              <input
+                ref="avatarInput"
+                type="file"
+                accept="image/jpeg,image/png,image/webp"
+                class="hidden"
+                @change="onAvatarSelected"
+              />
+            </template>
 
             <template v-if="activeView === 'overview'">
               <dl

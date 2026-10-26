@@ -26,6 +26,10 @@ class User(Base):
     daily_analysis_quota: Mapped[int] = mapped_column(
         Integer, default=5, server_default="5"
     )
+    # 每次上传/移除头像递增，用于前端 URL 缓存刷新
+    avatar_version: Mapped[int] = mapped_column(
+        Integer, default=0, server_default=text("0"), nullable=False
+    )
     last_login_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
@@ -36,6 +40,12 @@ class User(Base):
         onupdate=func.now(),
         nullable=False,
     )
+
+    @property
+    def avatar_url(self) -> str | None:
+        if not self.avatar_version:
+            return None
+        return f"/api/v1/auth/avatar/{self.id}?v={self.avatar_version}"
 
     def __repr__(self) -> str:  # pragma: no cover
         return f"<User {self.email}>"

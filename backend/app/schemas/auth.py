@@ -117,6 +117,11 @@ class UpdateProfileRequest(BaseModel):
         return value
 
 
+class AvatarUploadRequest(BaseModel):
+    # 前端 canvas 压缩后的 data URL（JPG/PNG/WebP），服务端仍会校验大小与文件头
+    data: str = Field(min_length=32, max_length=1_000_000)
+
+
 class ChangePasswordRequest(_PasswordMixin):
     current_password: str = Field(min_length=1, max_length=64)
     new_password: str = Field(min_length=8, max_length=64)
@@ -137,6 +142,7 @@ class UserOut(BaseModel):
     status: str
     email_verified_at: datetime | None = None
     daily_analysis_quota: int = 5
+    avatar_url: str | None = None
     created_at: datetime
 
 
