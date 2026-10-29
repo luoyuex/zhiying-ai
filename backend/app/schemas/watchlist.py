@@ -58,6 +58,16 @@ class WatchlistStatus(BaseModel):
     in_watchlist: bool
 
 
+class WatchlistOrderRequest(BaseModel):
+    """按前端拖动后的完整顺序提交。"""
+
+    symbols: list[str] = Field(min_length=1, max_length=50)
+
+
+class WatchlistOrderResponse(BaseModel):
+    symbols: list[str]
+
+
 class WatchlistBatchRequest(BaseModel):
     symbols: list[str] = Field(min_length=1, max_length=20)
     force: bool = False

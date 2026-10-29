@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 
 import type { AIJobState } from '@/api/ai'
 import { watchlistApi, type WatchlistEntry } from '@/api/watchlist'
@@ -13,14 +13,20 @@ import { getErrorMessage } from '@/utils/errors'
 
 const MAX_BATCH = 20
 const PENDING_STORAGE_PREFIX = 'zhiying:watchlist-pending:'
+const DRAG_THRESHOLD = 6
+const SCROLL_EDGE = 80
+const SCROLL_STEP = 16
 
 const auth = useAuthStore()
 
 const watchlist = ref<WatchlistEntry[]>([])
 const loading = ref(true)
 const error = ref('')
+const orderingError = ref('')
 const removingSymbol = ref('')
 const selectedSymbols = ref<string[]>([])
+
+const gridRef = ref<HTMLElement | null>(null)
 
 const count = computed(() => watchlist.value.length)
 const selectedCount = computed(() => selectedSymbols.value.length)
@@ -130,10 +136,191 @@ async function submitBatch(): Promise<void> {
   await batch.submit(selectedSymbols.value)
 }
 
+/* ---------- 拖动排序 ---------- */
+
+interface SlotRect {
+  symbol: string
+  left: number
+  top: number
+  right: number
+  bottom: number
+}
+
+const dragSymbol = ref('')
+const dragActive = ref(false)
+const orderSaving = ref(false)
+
+let dragStartX = 0
+let dragStartY = 0
+let slots: SlotRect[] = []
+let slotsScrollY = -1
+// 拖动开始前的顺序，保存失败或取消时回滚
+let orderBeforeDrag: string[] = []
+// 连续快速拖动时，排队最后一次顺序
+let queuedOrder: string[] | null = null
+
+function captureSlots(): void {
+  const grid = gridRef.value
+  if (!grid) return
+  slots = Array.from(grid.querySelectorAll<HTMLElement>('[data-wl-card]')).map((el) => {
+    const rect = el.getBoundingClientRect()
+    return {
+      symbol: el.dataset.wlCard ?? '',
+      left: rect.left,
+      top: rect.top,
+      right: rect.right,
+      bottom: rect.bottom,
+    }
+  })
+  slotsScrollY = window.scrollY
+}
+
+// 卡片位置固定在拖拽开始那一刻，避免边拖边换位造成来回抖动
+function ensureSlots(): void {
+  if (!slots.length || slotsScrollY !== window.scrollY) captureSlots()
+}
+
+function slotIndexAt(x: number, y: number): number {
+  let nearest = -1
+  let nearestDistance = Number.POSITIVE_INFINITY
+  for (let index = 0; index < slots.length; index += 1) {
+    const slot = slots[index]
+    if (x >= slot.left && x <= slot.right && y >= slot.top && y <= slot.bottom) {
+      return index
+    }
+    const dx = x - (slot.left + slot.right) / 2
+    const dy = y - (slot.top + slot.bottom) / 2
+    const distance = dx * dx + dy * dy
+    if (distance < nearestDistance) {
+      nearestDistance = distance
+      nearest = index
+    }
+  }
+  return nearest
+}
+
+function autoScroll(clientY: number): void {
+  const maxScroll = document.documentElement.scrollHeight - window.innerHeight
+  if (clientY > window.innerHeight - SCROLL_EDGE && window.scrollY < maxScroll) {
+    window.scrollBy(0, SCROLL_STEP)
+  } else if (clientY < SCROLL_EDGE && window.scrollY > 0) {
+    window.scrollBy(0, -SCROLL_STEP)
+  }
+}
+
+function moveDraggedTo(symbol: string): void {
+  const from = watchlist.value.findIndex((item) => item.symbol === dragSymbol.value)
+  const to = watchlist.value.findIndex((item) => item.symbol === symbol)
+  if (from < 0 || to < 0 || from === to) return
+  const next = watchlist.value.slice()
+  const [moved] = next.splice(from, 1)
+  next.splice(to, 0, moved)
+  watchlist.value = next
+}
+
+function onGridPointerDown(event: PointerEvent): void {
+  const target = event.target as HTMLElement | null
+  const grip = target?.closest<HTMLElement>('[data-wl-grip]')
+  if (!grip) return
+  if (event.pointerType === 'mouse' && event.button !== 0) return
+  const symbol = grip.dataset.wlGrip ?? ''
+  if (!symbol || watchlist.value.length < 2) return
+
+  event.preventDefault()
+  dragSymbol.value = symbol
+  dragActive.value = false
+  dragStartX = event.clientX
+  dragStartY = event.clientY
+  orderBeforeDrag = watchlist.value.map((item) => item.symbol)
+  orderingError.value = ''
+  slots = []
+  slotsScrollY = -1
+
+  window.addEventListener('pointermove', onPointerMove)
+  window.addEventListener('pointerup', onPointerUp)
+  window.addEventListener('pointercancel', onPointerUp)
+}
+
+function onPointerMove(event: PointerEvent): void {
+  if (!dragSymbol.value) return
+  if (!dragActive.value) {
+    const dx = event.clientX - dragStartX
+    const dy = event.clientY - dragStartY
+    if (dx * dx + dy * dy < DRAG_THRESHOLD * DRAG_THRESHOLD) return
+    dragActive.value = true
+    document.body.classList.add('select-none', 'cursor-grabbing')
+    captureSlots()
+  }
+  autoScroll(event.clientY)
+  ensureSlots()
+  const index = slotIndexAt(event.clientX, event.clientY)
+  const slot = slots[index]
+  if (slot) moveDraggedTo(slot.symbol)
+}
+
+function detachDragListeners(): void {
+  window.removeEventListener('pointermove', onPointerMove)
+  window.removeEventListener('pointerup', onPointerUp)
+  window.removeEventListener('pointercancel', onPointerUp)
+}
+
+function onPointerUp(): void {
+  detachDragListeners()
+  const wasActive = dragActive.value
+  const moved = wasActive
+    ? watchlist.value.map((item) => item.symbol).join() !== orderBeforeDrag.join()
+    : false
+  dragActive.value = false
+  dragSymbol.value = ''
+  slots = []
+  document.body.classList.remove('select-none', 'cursor-grabbing')
+  if (!moved) return
+  void persistOrder(watchlist.value.map((item) => item.symbol))
+}
+
+function restoreOrder(sequence: string[]): WatchlistEntry[] {
+  const bySymbol = new Map(watchlist.value.map((item) => [item.symbol, item]))
+  const restored: WatchlistEntry[] = []
+  for (const symbol of sequence) {
+    const item = bySymbol.get(symbol)
+    if (item) {
+      restored.push(item)
+      bySymbol.delete(symbol)
+    }
+  }
+  // 拖动期间被移除的股票不再回填，其余（理论上的新股票）保持在后
+  return restored.concat([...bySymbol.values()])
+}
+
+async function persistOrder(order: string[]): Promise<void> {
+  if (orderSaving.value) {
+    queuedOrder = order
+    return
+  }
+  orderSaving.value = true
+  try {
+    await watchlistApi.reorder(order)
+  } catch (err) {
+    const unchanged = watchlist.value.map((item) => item.symbol).join() === order.join()
+    if (unchanged) watchlist.value = restoreOrder(orderBeforeDrag)
+    orderingError.value = getErrorMessage(err, '排序保存失败，已恢复原顺序')
+  } finally {
+    orderSaving.value = false
+    const next = queuedOrder
+    queuedOrder = null
+    if (next) void persistOrder(next)
+  }
+}
+
 onMounted(async () => {
   await load()
   // 列表加载失败时保留存储，等下次刷新再恢复
   if (!error.value) batch.restore(watchlist.value.map((item) => item.symbol))
+})
+
+onBeforeUnmount(() => {
+  detachDragListeners()
+  document.body.classList.remove('select-none', 'cursor-grabbing')
 })
 </script>
 
@@ -145,6 +332,9 @@ onMounted(async () => {
         <h1 class="mt-1 text-[24px] font-semibold tracking-tight text-ink">自选股</h1>
       </div>
       <div v-if="count" class="flex flex-wrap items-center gap-3">
+        <span v-if="count > 1" class="hidden text-xs text-ink-3 sm:inline">
+          拖动卡片右上角手柄可调整顺序
+        </span>
         <label class="flex cursor-pointer items-center gap-1.5 text-xs text-ink-3">
           <input
             type="checkbox"
@@ -182,6 +372,7 @@ onMounted(async () => {
     </section>
 
     <p v-if="batchError" class="mt-3 text-xs text-danger">{{ batchError }}</p>
+    <p v-if="orderingError" class="mt-3 text-xs text-danger">{{ orderingError }}</p>
 
     <PortfolioDiagnosis v-if="!loading && !error && watchlist.length" class="mt-6" />
     <PriceAlertsOverview v-if="!loading && !error" />
@@ -230,13 +421,20 @@ onMounted(async () => {
         </RouterLink>
       </div>
 
-      <div v-else class="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+      <div
+        v-else
+        ref="gridRef"
+        class="grid gap-4 sm:grid-cols-2 xl:grid-cols-3"
+        @pointerdown="onGridPointerDown"
+      >
         <WatchlistCard
           v-for="item in watchlist"
           :key="item.symbol"
           :item="item"
           :selected="selectedSymbols.includes(item.symbol)"
           :batch="jobStates[item.symbol] ?? null"
+          :sortable="count > 1"
+          :dragging="dragActive && dragSymbol === item.symbol"
           @toggle="toggleSelect(item.symbol)"
           @remove="remove(item.symbol)"
           @updated="onMetaUpdated(item.symbol, $event)"

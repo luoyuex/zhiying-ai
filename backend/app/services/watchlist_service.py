@@ -53,6 +53,9 @@ async def add_watchlist(
         if len(existing) >= MAX_WATCHLIST:
             raise WatchlistLimitError(f"自选股最多 {MAX_WATCHLIST} 只")
 
+        # 新加入的股票插到最前面，和改造前"最新加入排最上"的观感一致
+        next_order = min((row.sort_order for row in existing), default=0) - 1
+
         result = await session.execute(
             insert(WatchlistItem)
             .values(
@@ -61,6 +64,7 @@ async def add_watchlist(
                 note=note.strip()[:120],
                 cost_price=cost_price,
                 quantity=quantity,
+                sort_order=next_order,
             )
             .on_conflict_do_nothing(constraint="uq_watchlist_user_symbol")
         )
@@ -101,6 +105,48 @@ async def update_watchlist(user_id: object, raw_symbol: str, changes: dict) -> b
             setattr(row, field, value)
         await session.commit()
         return True
+
+
+async def reorder_watchlist(user_id: object, raw_symbols: list[str]) -> list[str]:
+    """按传入顺序重排自选；返回落库后的完整顺序。
+
+    只覆盖列表里出现的股票，未传的保持原位置，因此前端应传完整列表。
+    """
+    ordered: list[str] = []
+    seen: set[str] = set()
+    for raw in raw_symbols:
+        try:
+            code = parse_symbol(raw).code
+        except InvalidSymbolError:
+            continue
+        if code in seen:
+            continue
+        seen.add(code)
+        ordered.append(code)
+    if not ordered:
+        return []
+
+    async with SessionLocal() as session:
+        rows = (
+            await session.scalars(
+                select(WatchlistItem).where(WatchlistItem.user_id == user_id)
+            )
+        ).all()
+        by_symbol = {row.symbol: row for row in rows}
+        for index, code in enumerate(ordered):
+            row = by_symbol.get(code)
+            if row is not None and row.sort_order != index:
+                row.sort_order = index
+        await session.commit()
+
+        current = (
+            await session.scalars(
+                select(WatchlistItem.symbol)
+                .where(WatchlistItem.user_id == user_id)
+                .order_by(WatchlistItem.sort_order.asc(), WatchlistItem.created_at.desc())
+            )
+        ).all()
+    return list(current)
 
 
 async def list_position_history(
@@ -169,7 +215,7 @@ async def list_watchlist(
             await session.scalars(
                 select(WatchlistItem)
                 .where(WatchlistItem.user_id == user_id)
-                .order_by(WatchlistItem.created_at.desc())
+                .order_by(WatchlistItem.sort_order.asc(), WatchlistItem.created_at.desc())
             )
         ).all()
         if not rows:

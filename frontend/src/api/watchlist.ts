@@ -140,6 +140,11 @@ export const watchlistApi = {
     })
   },
 
+  /** 拖动排序：提交完整顺序，返回落库后的顺序 */
+  reorder(symbols: string[]) {
+    return http.patch<{ symbols: string[] }>('/watchlist/order', { symbols })
+  },
+
   /** 组合 AI 诊断：单次 LLM 调用，耗时可能较长 */
   portfolioAnalysis() {
     return http.post<PortfolioDiagnosis>('/watchlist/portfolio-analysis', null, {

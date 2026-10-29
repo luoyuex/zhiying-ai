@@ -2,6 +2,7 @@
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 
 import type { ScreenerRecordDetail } from '@/api/screener'
+import MarkdownBlock from '@/components/ui/MarkdownBlock.vue'
 import { formatFullDateTime } from '@/utils/report'
 import { exportScreenerCsv } from './screenerExport'
 import { strategyMeta } from './strategy'
@@ -291,11 +292,11 @@ onBeforeUnmount(() => {
                 >
                   {{ report.title }}
                 </summary>
-                <p
-                  class="max-h-80 overflow-y-auto whitespace-pre-line border-t border-line px-3.5 py-3 text-[11px] leading-relaxed text-ink-2"
+                <div
+                  class="max-h-80 overflow-y-auto border-t border-line px-3.5 py-3"
                 >
-                  {{ report.content || '暂无内容' }}
-                </p>
+                  <MarkdownBlock :content="report.content" />
+                </div>
               </details>
             </div>
 

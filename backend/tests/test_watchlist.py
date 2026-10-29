@@ -174,6 +174,76 @@ async def test_watchlist_api(monkeypatch):
             await session.commit()
 
 
+async def test_watchlist_reorder(monkeypatch):
+    """拖动排序：按提交顺序落库，忽略非法代码与他人自选。"""
+    user = await make_user()
+    other = await make_user()
+
+    async def fake_fetch_quotes(symbols):
+        return {
+            item.code: Quote(
+                symbol=item.code,
+                name=f"测试{item.code}",
+                price=10.0,
+                change_pct=1.0,
+                source="test",
+                fetched_at=now_shanghai(),
+            )
+            for item in symbols
+        }
+
+    async def fake_prime(_: MarketDataService, quotes: dict[str, Quote]) -> None:
+        return None
+
+    monkeypatch.setattr(watchlist_service, "fetch_quotes", fake_fetch_quotes)
+    monkeypatch.setattr(MarketDataService, "prime_quotes", fake_prime)
+    app.dependency_overrides[get_current_user] = lambda: user
+    try:
+        transport = ASGITransport(app=app)
+        async with AsyncClient(transport=transport, base_url="http://testserver") as client:
+            for symbol in ("600519", "000001", "600036"):
+                response = await client.post("/api/v1/watchlist", json={"symbol": symbol})
+                assert response.status_code == 200, response.text
+
+            # 新加入的排在最前
+            response = await client.get("/api/v1/watchlist")
+            assert [item["symbol"] for item in response.json()] == [
+                "600036",
+                "000001",
+                "600519",
+            ]
+
+            response = await client.patch(
+                "/api/v1/watchlist/order",
+                json={"symbols": ["600519", "600036", "000001"]},
+            )
+            assert response.status_code == 200, response.text
+            assert response.json() == {"symbols": ["600519", "600036", "000001"]}
+
+            response = await client.get("/api/v1/watchlist")
+            assert [item["symbol"] for item in response.json()] == [
+                "600519",
+                "600036",
+                "000001",
+            ]
+
+            # 非法代码被忽略，未提交的股票保持在后
+            response = await client.patch(
+                "/api/v1/watchlist/order",
+                json={"symbols": ["000001", "ABC", "600519", "600036"]},
+            )
+            assert response.status_code == 200, response.text
+            assert response.json() == {"symbols": ["000001", "600519", "600036"]}
+
+            # 别人的自选不受影响
+            assert await list_watchlist(other.id, FakeMarket()) == []
+    finally:
+        app.dependency_overrides.clear()
+        async with SessionLocal() as session:
+            await session.execute(delete(User).where(User.id.in_([user.id, other.id])))
+            await session.commit()
+
+
 async def test_watchlist_api_update_and_batch(monkeypatch):
     user = await make_user()
 

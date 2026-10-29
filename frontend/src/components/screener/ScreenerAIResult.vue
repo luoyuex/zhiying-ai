@@ -2,6 +2,7 @@
 import { computed, ref } from 'vue'
 
 import type { ScreenerAnalysisResponse, ScreenerStrategyId } from '@/api/screener'
+import MarkdownBlock from '@/components/ui/MarkdownBlock.vue'
 import { getErrorMessage } from '@/utils/errors'
 import { datedFilename, exportElementToPdf } from '@/utils/pdf'
 import { formatFullDateTime } from '@/utils/report'
@@ -170,12 +171,9 @@ async function exportPdf(): Promise<void> {
           class="rounded-md bg-surface p-3"
         >
           <div class="text-[11px] font-medium text-ink">{{ report.title }}</div>
-          <p
-            class="mt-1 max-h-72 overflow-y-auto whitespace-pre-line text-[11px] leading-relaxed text-ink-2"
-            data-pdf-expand
-          >
-            {{ report.content || '暂无内容' }}
-          </p>
+          <div class="mt-1 max-h-72 overflow-y-auto" data-pdf-expand>
+            <MarkdownBlock :content="report.content" />
+          </div>
         </div>
       </div>
     </div>

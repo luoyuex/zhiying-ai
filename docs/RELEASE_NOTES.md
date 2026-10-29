@@ -4,6 +4,71 @@
 
 ---
 
+## 2026-10-28 · 自选股手动排序
+
+### 本次更新
+
+- **拖动排序**：自选股卡片右上角新增拖动手柄，按住可把卡片拖到任意位置，顺序立即生效并落库；刷新、重新登录后保持。拖动过程中卡片半透明，靠近窗口上下边缘会自动滚动。
+- **失败回滚**：保存顺序失败时列表自动回到拖动前的顺序，并在页头提示。
+- 新加入的自选仍然排在最前面；历史自选按原来的展示顺序（加入时间倒序）回填，升级后观感不变。
+
+### 影响范围
+
+| 项目 | 说明 |
+| --- | --- |
+| 数据库 | 1 个迁移：`a3b4c5d6e7f8`（`watchlist_items.sort_order` 及索引，含按原顺序的回填）；目标 head `a3b4c5d6e7f8` |
+| 后端 API | 新增 `PATCH /watchlist/order`；`GET /watchlist` 改为按用户自定义顺序返回 |
+| 后端 worker | 无变化 |
+| 前端 | 自选页拖动手柄与排序交互，需要重新构建 |
+| 依赖 | 无新增 Python / npm 依赖 |
+
+### 更新前确认
+
+- 本次没有新增 `.env` 配置项。
+- 迁移会改写 `watchlist_items`，请按第 1 步先备份。
+
+### 服务器更新步骤
+
+按顺序执行，方括号内为执行身份。
+
+#### 1. 备份数据库 `[zhiying]`
+
+```bash
+cd /opt/zhiying-ai
+docker compose exec -T postgres pg_dump -U zhiying -d zhiying -Fc \
+  | gzip > /var/backups/zhiying/zhiying-$(date +%F-%H%M).dump.gz
+```
+
+#### 2. 拉代码、装依赖、构建前端 `[zhiying]`
+
+```bash
+cd /opt/zhiying-ai
+git pull --ff-only
+
+cd /opt/zhiying-ai/backend
+~/.local/bin/uv sync --frozen --no-dev --python 3.12
+~/.local/bin/uv run alembic upgrade head
+
+cd /opt/zhiying-ai/frontend
+npm ci
+npm run build
+```
+
+#### 3. 重启 API `[zhiying]`
+
+```bash
+sudo systemctl restart zhiying-api
+```
+
+#### 4. 更新后检查
+
+```bash
+curl -s https://你的域名/health
+sudo systemctl status zhiying-api --no-pager
+```
+
+---
+
 ## 2026-10-25 · A 包：Webhook、报告价位提醒、导出与头像
 
 ### 本次更新

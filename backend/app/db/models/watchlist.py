@@ -6,6 +6,7 @@ from datetime import datetime
 from sqlalchemy import (
     DateTime,
     ForeignKey,
+    Index,
     Integer,
     Numeric,
     String,
@@ -23,6 +24,7 @@ class WatchlistItem(Base):
     __tablename__ = "watchlist_items"
     __table_args__ = (
         UniqueConstraint("user_id", "symbol", name="uq_watchlist_user_symbol"),
+        Index("ix_watchlist_items_user_sort", "user_id", "sort_order"),
     )
 
     id: Mapped[uuid.UUID] = mapped_column(
@@ -40,6 +42,8 @@ class WatchlistItem(Base):
     note: Mapped[str] = mapped_column(String(120), default="", server_default="", nullable=False)
     cost_price: Mapped[float | None] = mapped_column(Numeric(12, 3))
     quantity: Mapped[int | None] = mapped_column(Integer)
+    # 用户手动拖动的展示顺序，越小越靠前；新加入的自选插到最前面
+    sort_order: Mapped[int] = mapped_column(Integer, default=0, server_default="0", nullable=False)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )

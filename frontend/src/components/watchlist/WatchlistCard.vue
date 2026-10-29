@@ -22,6 +22,8 @@ const props = defineProps<{
   item: WatchlistEntry
   selected: boolean
   batch: WatchlistJobState | null
+  sortable?: boolean
+  dragging?: boolean
 }>()
 
 const emit = defineEmits<{
@@ -324,8 +326,12 @@ async function saveEdit(): Promise<void> {
 
 <template>
   <article
-    class="relative rounded-lg border bg-canvas transition-colors"
-    :class="selected ? 'border-line-strong' : 'border-line hover:border-line-strong'"
+    :data-wl-card="item.symbol"
+    class="relative rounded-lg border bg-canvas transition-[opacity,border-color,box-shadow]"
+    :class="[
+      selected ? 'border-line-strong' : 'border-line hover:border-line-strong',
+      dragging ? 'opacity-60 shadow-md' : '',
+    ]"
   >
     <label class="absolute left-3 top-3 flex size-5 items-center justify-center">
       <input
@@ -336,6 +342,24 @@ async function saveEdit(): Promise<void> {
         @change="emit('toggle')"
       />
     </label>
+
+    <button
+      v-if="sortable"
+      type="button"
+      class="absolute right-9 top-2 flex size-6 cursor-grab touch-none items-center justify-center rounded-md text-ink-3 transition-colors hover:bg-surface-2 hover:text-ink active:cursor-grabbing"
+      title="拖动调整顺序"
+      :aria-label="`拖动 ${item.name} 调整顺序`"
+      :data-wl-grip="item.symbol"
+    >
+      <svg class="size-3.5" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+        <circle cx="9" cy="6" r="1.5" />
+        <circle cx="15" cy="6" r="1.5" />
+        <circle cx="9" cy="12" r="1.5" />
+        <circle cx="15" cy="12" r="1.5" />
+        <circle cx="9" cy="18" r="1.5" />
+        <circle cx="15" cy="18" r="1.5" />
+      </svg>
+    </button>
 
     <button
       type="button"
@@ -355,7 +379,7 @@ async function saveEdit(): Promise<void> {
       </svg>
     </button>
 
-    <RouterLink :to="`/stock/${item.symbol}`" class="block p-4 pl-10 pr-9">
+    <RouterLink :to="`/stock/${item.symbol}`" class="block p-4 pl-10 pr-16">
       <div class="flex items-baseline justify-between gap-2">
         <span class="truncate text-[13px] font-medium text-ink">{{ item.name }}</span>
         <span class="shrink-0 text-[11px] tabular-nums text-ink-3">

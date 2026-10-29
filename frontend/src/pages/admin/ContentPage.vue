@@ -7,6 +7,7 @@ import DataTable from '@/components/admin/DataTable.vue'
 import Pagination from '@/components/admin/Pagination.vue'
 import Button from '@/components/ui/Button.vue'
 import Input from '@/components/ui/Input.vue'
+import MarkdownBlock from '@/components/ui/MarkdownBlock.vue'
 import Select from '@/components/ui/Select.vue'
 import type {
   AdminContentPortfolioDetail,
@@ -582,21 +583,19 @@ onUnmounted(() => {
           <div class="mt-3 space-y-3">
             <section v-if="screenerDetail.result?.fund_flow">
               <h3 class="text-[11px] font-medium text-ink-3">资金面</h3>
-              <p class="mt-1 whitespace-pre-wrap text-[12px] leading-relaxed text-ink-2">
-                {{ screenerDetail.result.fund_flow }}
-              </p>
+              <MarkdownBlock class="mt-1" size="sm" :content="screenerDetail.result.fund_flow" />
             </section>
             <section v-if="screenerDetail.result?.industry">
               <h3 class="text-[11px] font-medium text-ink-3">行业板块</h3>
-              <p class="mt-1 whitespace-pre-wrap text-[12px] leading-relaxed text-ink-2">
-                {{ screenerDetail.result.industry }}
-              </p>
+              <MarkdownBlock class="mt-1" size="sm" :content="screenerDetail.result.industry" />
             </section>
             <section v-if="screenerDetail.result?.fundamental">
               <h3 class="text-[11px] font-medium text-ink-3">基本面</h3>
-              <p class="mt-1 whitespace-pre-wrap text-[12px] leading-relaxed text-ink-2">
-                {{ screenerDetail.result.fundamental }}
-              </p>
+              <MarkdownBlock
+                class="mt-1"
+                size="sm"
+                :content="screenerDetail.result.fundamental"
+              />
             </section>
           </div>
 

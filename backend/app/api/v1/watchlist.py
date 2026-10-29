@@ -32,6 +32,8 @@ from app.schemas.watchlist import (
     WatchlistBatchRequest,
     WatchlistBatchResult,
     WatchlistEntry,
+    WatchlistOrderRequest,
+    WatchlistOrderResponse,
     WatchlistStatus,
     WatchlistUpdateRequest,
 )
@@ -60,6 +62,7 @@ from app.services.watchlist_service import (
     list_position_history,
     list_watchlist,
     remove_watchlist,
+    reorder_watchlist,
     update_watchlist,
 )
 
@@ -96,6 +99,16 @@ async def add(
     except WatchlistLimitError as exc:
         raise errors.watchlist_full(MAX_WATCHLIST) from exc
     return WatchlistAddResponse(symbol=symbol, added=added)
+
+
+@router.patch("/order", response_model=WatchlistOrderResponse, summary="调整自选顺序")
+async def reorder(
+    payload: WatchlistOrderRequest,
+    user: User = Depends(get_current_user),
+) -> WatchlistOrderResponse:
+    # 必须声明在 /{symbol} 之前，否则 "order" 会被当成股票代码
+    symbols = await reorder_watchlist(user.id, payload.symbols)
+    return WatchlistOrderResponse(symbols=symbols)
 
 
 @router.patch("/{symbol}", response_model=WatchlistStatus, summary="更新自选信息")

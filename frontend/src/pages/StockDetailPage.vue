@@ -49,6 +49,32 @@ type AdjustValue = (typeof ADJUSTS)[number]['value']
 const route = useRoute()
 const router = useRouter()
 
+const backPath = computed(() => {
+  void route.fullPath
+  const state = window.history.state as { back?: unknown } | null
+  const back = state?.back
+  return typeof back === 'string' && back.startsWith('/') ? back : ''
+})
+
+const BACK_LABELS: Record<string, string> = {
+  '/': '返回首页',
+  '/watchlist': '返回自选股',
+  '/reports': '返回历史报告',
+  '/screener': '返回选股',
+  '/admin': '返回管理后台',
+}
+
+const backLabel = computed(() => {
+  if (!backPath.value) return '返回首页'
+  const pathname = backPath.value.split(/[?#]/)[0] ?? ''
+  return BACK_LABELS[pathname] ?? '返回上一页'
+})
+
+function goBack(): void {
+  if (backPath.value) router.back()
+  else void router.push('/')
+}
+
 const code = computed(() => String(route.params.symbol ?? '').trim())
 const validCode = computed(() => /^\d{6}$/.test(code.value))
 
@@ -580,7 +606,7 @@ function submitSearch(): void {
     void loadAll(value)
     return
   }
-  void router.push({ name: 'stock', params: { symbol: value } })
+  void router.replace({ name: 'stock', params: { symbol: value } })
 }
 
 watch(
@@ -617,13 +643,14 @@ onBeforeUnmount(() => {
   <AppShell>
     <section class="flex flex-wrap items-end justify-between gap-4">
       <div>
-        <RouterLink
-          to="/"
+        <button
+          type="button"
           class="inline-flex items-center gap-1 text-xs text-ink-3 transition-colors hover:text-ink"
+          @click="goBack"
         >
           <span aria-hidden="true">←</span>
-          返回首页
-        </RouterLink>
+          {{ backLabel }}
+        </button>
         <h1 class="mt-2 text-[24px] font-semibold tracking-tight text-ink">
           {{ quote?.name ?? '个股行情' }}
         </h1>
@@ -670,9 +697,13 @@ onBeforeUnmount(() => {
       class="mt-6 rounded-lg border border-line bg-canvas px-5 py-10 text-center text-sm text-ink-2"
     >
       股票代码必须是 6 位数字。
-      <RouterLink to="/" class="ml-1 font-medium text-primary underline-offset-2 hover:text-primary-hover hover:underline">
-        返回首页
-      </RouterLink>
+      <button
+        type="button"
+        class="ml-1 font-medium text-primary underline-offset-2 hover:text-primary-hover hover:underline"
+        @click="goBack"
+      >
+        {{ backLabel }}
+      </button>
     </div>
 
     <div
