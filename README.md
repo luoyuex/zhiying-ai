@@ -25,7 +25,7 @@ A 股 AI 分析工作台。前端 Vue 3 + TypeScript，后端 FastAPI + PostgreS
 
 > 📋 完整的开发计划、已完成/未完成清单与风险登记见 **[docs/DEVELOPMENT_PLAN.md](docs/DEVELOPMENT_PLAN.md)**。
 >
-> 生产部署（Nginx 同域反代 + HTTPS + systemd + Docker）见 **[docs/DEPLOYMENT.md](docs/DEPLOYMENT.md)**。
+> 生产部署（Nginx 同域反代 + HTTPS + systemd + Docker）见 **[docs/DEPLOYMENT.md](docs/DEPLOYMENT.md)**；想一条命令拉起全栈，见 **[docs/DOCKER.md](docs/DOCKER.md)**。
 >
 > 每个版本需要执行的更新步骤与新增配置见 **[docs/RELEASE_NOTES.md](docs/RELEASE_NOTES.md)**。
 
@@ -33,30 +33,56 @@ A 股 AI 分析工作台。前端 Vue 3 + TypeScript，后端 FastAPI + PostgreS
 
 ## 快速开始
 
-### 0. 环境要求
+### 服务器部署（Docker 全栈）
+
+克隆后三步拉起官网、工作台、API、worker、PostgreSQL 与 Redis：
+
+```bash
+git clone https://github.com/luoyuex/zhiying-ai.git
+cd zhiying-ai
+
+./scripts/docker-init.sh        # 复制 .env 并生成随机密钥
+vi .env                         # 至少填 LLM_BASE_URL / LLM_API_KEY / LLM_MODEL
+
+docker compose up -d --build    # 首次会自动跑数据库迁移
+```
+
+打开 `http://服务器IP:8088/`（官网）或 `/app/`（工作台）。首次启动后同步一次股票列表：
+
+```bash
+docker compose exec api .venv/bin/python -m app.scripts.seed_stocks
+```
+
+端口、HTTPS、备份、更新与排障见 **[docs/DOCKER.md](docs/DOCKER.md)**。
+
+### 本地开发
+
+#### 0. 环境要求
 
 | 依赖 | 版本 | 说明 |
 | --- | --- | --- |
-| Docker | 24+ | 跑 PostgreSQL 16 与 Redis 7 |
+| Docker | 24+ | 一键部署全栈，或本地只跑 PostgreSQL 16 与 Redis 7 |
 | Python | 3.12+ | 用 uv 管理虚拟环境 |
 | uv | 0.5+ | `pip install uv` 或官方脚本安装 |
-| Node.js | 20+ | 前端构建 |
+| Node.js | 24+ | 前端构建（`html2canvas-pro` 要求 Node 24+） |
 
-### 1. 准备配置
+#### 1. 准备配置
 
 ```bash
 cp .env.example .env
 ```
 
-`.env` 里已有本地生成的 `JWT_SECRET` / `OTP_SECRET`（仓库中的 `.env` 已带默认值，可跳过复制）。
+本地开发可以直接用模板里的占位密钥；部署到服务器前必须换成随机值（`./scripts/docker-init.sh` 会自动生成）。
 
-### 2. 启动数据库与缓存
+#### 2. 启动数据库与缓存
 
 ```bash
-npm run up          # 等价于 docker compose up -d
+npm run up          # 等价于 docker compose up -d postgres redis
 ```
 
-### 3. 启动后端
+> 只起依赖，不启动 API / worker / web；全栈部署用 `docker compose up -d --build`。
+
+#### 3. 启动后端
 
 ```bash
 cd backend
@@ -83,7 +109,7 @@ uv run python -m app.scripts.seed_stocks
 
 新股 / 退市后重跑同一命令即可增量刷新；根目录也可用 `npm run seed`。
 
-### 4. 启动前端
+#### 4. 启动前端
 
 ```bash
 cd frontend
@@ -95,14 +121,15 @@ npm run dev
 
 根目录也可以用 `npm run api` / `npm run web` 启动（等价命令）。
 
-### 端口约定
+#### 端口约定
 
 | 服务 | 端口 | 说明 |
 | --- | --- | --- |
+| Web（Docker 全栈） | **8088** | `WEB_PORT` 可改；Nginx 静态站点 + `/api` 反代 |
 | 前端（Vite） | **5288** | 固定端口，`strictPort: true`，被占用会直接报错而不是自动换端口 |
 | 后端（FastAPI） | **8010** | 只用 127.0.0.1，不对外暴露 |
-| PostgreSQL | 5432 | Docker |
-| Redis | 6379 | Docker |
+| PostgreSQL | 5432 | Docker，只绑 127.0.0.1 |
+| Redis | 6379 | Docker，只绑 127.0.0.1 |
 
 改后端端口需要同时改三处：`package.json` 的 `api` 脚本、`Makefile` 的 `api` 目标、`frontend/vite.config.ts` 的 proxy `target`。
 
@@ -265,7 +292,7 @@ zhiying-ai/
 │     ├─ components/          UI 基础组件 + 布局 + market（行情速查 / 迷你 K 线）
 │     ├─ pages/               登录 / 注册 / 重置密码 / 工作台 / 个股详情 / 历史报告 / 分析报告
 │     └─ styles/              设计 token（应用）+ marketing.css（官网）
-├─ docker-compose.yml         本地 PostgreSQL + Redis
+├─ docker-compose.yml         全栈编排；也可只起 postgres / redis 供本地开发
 ├─ docs/ARCHITECTURE.md       架构说明
 └─ .env.example               配置模板
 ```
@@ -280,6 +307,8 @@ zhiying-ai/
 - **上线前**：把 `frontend/index.html` 里的 canonical、`og:image`、`twitter:image` 改成正式域名的绝对地址（当前为相对路径），并基于正式域名补一份 `sitemap.xml`，把首页地址写进去。`robots.txt` 已允许搜索引擎与 AI 爬虫抓取官网，并禁止抓取 `/app/` 与 `/api/`。
 
 ### 生产部署（Nginx）
+
+> 已有 Docker 环境时优先用 **[docs/DOCKER.md](docs/DOCKER.md)**；下面是裸机 Nginx + systemd 方式。
 
 可直接参考 **`deploy/nginx.conf.example`**，要点只有三条：
 

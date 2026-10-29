@@ -1,15 +1,34 @@
+# 一套文件两种用法：
+#   全栈一键部署：docker compose up -d --build
+#   本地只起依赖：docker compose up -d postgres redis（后端仍用 uv 在宿主机跑）
+#
+# 不写 name：项目名沿用仓库目录名（如 zhiying-ai），
+# 已有开发环境的数据卷 zhiying-ai_pgdata / zhiying-ai_redisdata 不会被换掉。
+
+x-api-build: &api-build
+  build:
+    context: ./backend
+    dockerfile: Dockerfile
+  image: zhiying-api:local
+
+x-api-env: &api-env
+  # 容器内连服务名；宿主机开发仍用 .env 里的 localhost
+  DATABASE_URL: postgresql+asyncpg://zhiying:${POSTGRES_PASSWORD:-zhiying}@postgres:5432/zhiying
+  REDIS_URL: redis://redis:6379/0
+  TZ: Asia/Shanghai
+
 services:
   postgres:
     image: postgres:16-alpine
-    container_name: zhiying-postgres
     restart: unless-stopped
     environment:
       POSTGRES_USER: zhiying
-      POSTGRES_PASSWORD: zhiying
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-zhiying}
       POSTGRES_DB: zhiying
       TZ: Asia/Shanghai
     ports:
-      - "5432:5432"
+      # 只绑回环：宿主机开发可直连，公网访问不到
+      - "127.0.0.1:${POSTGRES_PORT:-5432}:5432"
     volumes:
       - pgdata:/var/lib/postgresql/data
     healthcheck:
@@ -20,11 +39,12 @@ services:
 
   redis:
     image: redis:7-alpine
-    container_name: zhiying-redis
     restart: unless-stopped
     command: ["redis-server", "--appendonly", "yes"]
+    environment:
+      TZ: Asia/Shanghai
     ports:
-      - "6379:6379"
+      - "127.0.0.1:${REDIS_PORT:-6379}:6379"
     volumes:
       - redisdata:/data
     healthcheck:
@@ -32,6 +52,94 @@ services:
       interval: 5s
       timeout: 3s
       retries: 10
+
+  # 一次性迁移：幂等，每次 up 都会跑到最新版本
+  migrate:
+    <<: *api-build
+    command: [".venv/bin/alembic", "upgrade", "head"]
+    env_file:
+      - .env
+    environment: *api-env
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: "no"
+
+  api:
+    <<: *api-build
+    init: true
+    env_file:
+      - .env
+    environment: *api-env
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+    restart: unless-stopped
+    healthcheck:
+      test:
+        [
+          "CMD",
+          ".venv/bin/python",
+          "-c",
+          "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8010/health', timeout=5)",
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+      start_period: 20s
+
+  worker:
+    <<: *api-build
+    init: true
+    command: [".venv/bin/arq", "app.worker.WorkerSettings"]
+    env_file:
+      - .env
+    environment: *api-env
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+    restart: unless-stopped
+    # 发布/重启时给进行中的 AI 任务留出收尾时间
+    stop_grace_period: 120s
+    healthcheck:
+      test:
+        [
+          "CMD",
+          ".venv/bin/python",
+          "-c",
+          "import os, redis; r = redis.from_url(os.environ['REDIS_URL']); raise SystemExit(0 if r.get('ai:worker:alive') else 1)",
+        ]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+
+  web:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    image: zhiying-web:local
+    restart: unless-stopped
+    environment:
+      TZ: Asia/Shanghai
+    ports:
+      - "${WEB_PORT:-8088}:80"
+    depends_on:
+      api:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O /dev/null http://127.0.0.1/index.html || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
 
 volumes:
   pgdata:

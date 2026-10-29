@@ -1,12 +1,21 @@
-.PHONY: up down logs migrate revision api web test build
+.PHONY: up down logs docker-up docker-down docker-logs migrate revision api web test build
 
 up:
-	docker compose up -d
+	docker compose up -d postgres redis
 
 down:
 	docker compose down
 
 logs:
+	docker compose logs -f
+
+docker-up:
+	docker compose up -d --build
+
+docker-down:
+	docker compose down
+
+docker-logs:
 	docker compose logs -f
 
 migrate:

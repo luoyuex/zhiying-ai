@@ -4,9 +4,12 @@
   "private": true,
   "description": "智盈 AI —— A 股 AI 分析工作台",
   "scripts": {
-    "up": "docker compose up -d",
+    "up": "docker compose up -d postgres redis",
     "down": "docker compose down",
     "logs": "docker compose logs -f",
+    "docker-up": "docker compose up -d --build",
+    "docker-down": "docker compose down",
+    "docker-logs": "docker compose logs -f",
     "api": "uv run --directory backend uvicorn app.main:app --reload --reload-dir app --host 127.0.0.1 --port 8010",
     "worker": "uv run --directory backend arq app.worker.WorkerSettings",
     "web": "npm --prefix frontend run dev",

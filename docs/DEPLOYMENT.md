@@ -4,7 +4,9 @@
 >
 > 文档对应 2026-10 的代码；配置项以仓库当前 `.env.example` 与 `backend/pyproject.toml` 为准。
 >
-> 基线：Ubuntu 22.04 / 24.04 LTS + Nginx + systemd + Docker Compose（仅用于 PostgreSQL / Redis）。
+> 基线：Ubuntu 22.04 / 24.04 LTS + Nginx + systemd + Docker Compose（本文只用它跑 PostgreSQL / Redis，全栈 Compose 见 DOCKER.md）。
+>
+> 只想快速跑起来：用 **[DOCKER.md](DOCKER.md)** 的全栈 Compose，一条命令拉起全部服务。本文是裸机 + systemd 的精调部署，二者共用同一份 `.env` 与数据库结构。
 >
 > 使用宝塔 / 1Panel 时，Nginx 站点与证书申请可以换成面板操作；Python、systemd、Docker 步骤不变。
 >
@@ -159,7 +161,7 @@ openssl rand -hex 16   # 填数据库密码，同时用于 DATABASE_URL 和 POST
 DATABASE_URL=postgresql+asyncpg://zhiying:REPLACE_DB_PASSWORD@127.0.0.1:5432/zhiying
 REDIS_URL=redis://127.0.0.1:6379/0
 
-# 仅给 docker-compose.override.yml 使用；应用本身不读这个键
+# Docker Compose 读取该键作为数据库密码；应用本身不读这个键
 POSTGRES_PASSWORD=REPLACE_DB_PASSWORD
 
 # ===== 安全 =====
@@ -234,41 +236,27 @@ EGRESS_PROXY_ENABLED=false
 
 ## 4. 启动 PostgreSQL 与 Redis
 
-### 4.1 生产覆盖文件 `[zhiying]`
+### 4.1 密码与端口
 
-项目自带的 `docker-compose.yml` 默认把 `5432`、`6379` 暴露到所有网卡，密码也是弱口令。生产环境先创建覆盖文件，再第一次启动容器。
+项目自带的 `docker-compose.yml` 是**全栈编排**（postgres / redis / migrate / api / worker / web）。裸机部署只用其中的数据库与缓存，注意两点：
 
-```bash
-cd /opt/zhiying-ai
+- `5432`、`6379` **已经只绑定 `127.0.0.1`**，不需要再写覆盖文件；
+- 数据库密码从 `.env` 的 `POSTGRES_PASSWORD` 读取，缺失时回退到弱口令 `zhiying`。
 
-cat > docker-compose.override.yml <<'EOF'
-services:
-  postgres:
-    environment:
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}
-    ports: !override
-      - "127.0.0.1:5432:5432"
+所以只要按 3.1 把 `POSTGRES_PASSWORD` 设成强密码，并保证 `DATABASE_URL` 使用同一个密码即可。
 
-  redis:
-    ports: !override
-      - "127.0.0.1:6379:6379"
-EOF
-
-echo 'docker-compose.override.yml' >> .git/info/exclude
-```
-
-> 这里必须用 `!override`。Compose 默认会把同名 `ports` 合并，基础文件里的 `0.0.0.0:5432` 仍会保留；`!override` 才会整段替换。`!override` 需要 Docker Compose 2.24+；第 2.3 节用官方脚本安装的版本满足要求。如果版本过旧，先升级 Docker Compose，或直接修改基础文件的 `ports` 并确认 `ss` 只显示 `127.0.0.1`。
->
-> 本文所有 compose 命令都在 `/opt/zhiying-ai` 下直接执行 `docker compose ...`，**不要显式加 `-f docker-compose.yml`**，否则 Compose 不会自动加载 `docker-compose.override.yml`，数据库会重新暴露到 0.0.0.0。
+> 如果你从旧版本升级、本地还留着 `docker-compose.override.yml`（用 `!override` 改端口的那种），它仍然兼容，但已经不是必需；不需要时删掉，避免两套配置互相干扰。
 
 ### 4.2 第一次启动
 
+**只启动数据库与缓存**：不要执行不带服务名的 `docker compose up -d`，那会把 API、worker、web 也一起拉起来，和 systemd 里的进程重复。
+
 ```bash
 cd /opt/zhiying-ai
-docker compose up -d
+docker compose up -d postgres redis
 docker compose ps
 
-# 确认只监听回环地址；如果看到 0.0.0.0:5432 或 0.0.0.0:6379，说明覆盖文件没生效
+# 确认只监听回环地址；如果看到 0.0.0.0:5432 或 0.0.0.0:6379，说明有旧覆盖文件或旧容器还在
 ss -lntp | grep -E ':5432|:6379'
 
 docker compose exec -T postgres pg_isready -U zhiying -d zhiying
@@ -286,7 +274,7 @@ docker compose exec -T redis redis-cli ping
 >
 > `docker compose down` 会保留数据卷；**不要使用 `docker compose down -v`**，它会删除 PostgreSQL 和 Redis 的数据卷。
 
-> 如果数据卷在创建覆盖文件之前就已经初始化，数据库密码仍是旧的 `zhiying`。此时要么删除数据卷重建（会丢数据），要么进入容器执行：
+> 如果数据卷在此之前已经用弱口令 `zhiying` 初始化过，数据库密码不会跟着 `.env` 变。此时要么删除数据卷重建（会丢数据），要么进入容器执行：
 >
 > ```bash
 > docker compose exec postgres psql -U zhiying -d postgres \
@@ -837,7 +825,7 @@ systemctl start zhiying-worker zhiying-api
 发布注意：
 
 - 每个版本需要手动补充的配置与专项验收见 **[RELEASE_NOTES.md](RELEASE_NOTES.md)**。
-- **不要运行 `git clean -fdx`**：`.env`、日志、`docker-compose.override.yml` 都在忽略列表中，会被删除。
+- **不要运行 `git clean -fdx`**：`.env`、日志、以及可能存在的 `docker-compose.override.yml` 都在忽略列表中，会被删除。
 - 更新后对照 `.env.example`，如果新增了配置键，需要手动补到 `.env`。
 - **worker 必须重启**：定时任务调度、汇总邮件、价位提醒检查等 cron 在 worker 进程内注册，只重启 API 不会加载新代码。
 - 当前 ARQ worker 没有设置 `job_completion_wait`，`systemctl stop/restart zhiying-worker` 会立即取消正在跑的 AI / 选股任务。发布尽量避开用户使用高峰。
@@ -1051,9 +1039,10 @@ certbot renew --dry-run
 ├─ frontend/
 │  ├─ dist/                    # npm run build 产物，Nginx root
 │  └─ src/
-├─ docker-compose.yml
-├─ docker-compose.override.yml # 服务器本机文件，绑定 127.0.0.1 + 强密码
-└─ docs/DEPLOYMENT.md
+├─ docker-compose.yml         全栈编排；裸机部署只用 postgres / redis
+├─ scripts/docker-init.sh      生成 .env 与随机密钥
+├─ docs/DOCKER.md              Docker 全栈一键部署
+└─ docs/DEPLOYMENT.md          本文
 ```
 
 | 端口 | 服务 | 暴露范围 |
