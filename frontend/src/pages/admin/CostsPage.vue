@@ -147,7 +147,7 @@ onMounted(() => {
 <template>
   <section class="flex flex-wrap items-end justify-between gap-4">
     <div>
-      <p class="text-[13px] text-ink-3">按 LLM 调用流水聚合，成本为估算值</p>
+      <p class="text-[13px] text-ink-3">模型调用与成本明细，金额为估算值</p>
       <h1 class="mt-1 text-[24px] font-semibold tracking-tight text-ink">成本日报</h1>
     </div>
     <div class="flex rounded-md bg-surface-2 p-0.5 text-xs">
@@ -169,7 +169,7 @@ onMounted(() => {
   <div class="mt-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
     <StatCard label="调用次数" :value="callText" :hint="`成功率 ${successText}`" />
     <StatCard label="估算成本" :value="costText" hint="按模型单价估算" />
-    <StatCard label="Token 总量" :value="tokenText" hint="prompt + completion" />
+    <StatCard label="Token 总量" :value="tokenText" hint="输入 + 输出" />
     <StatCard
       label="未定价调用"
       :value="summary?.unpriced_calls ?? '—'"

@@ -120,7 +120,7 @@ async def _run(args: argparse.Namespace) -> None:
 
 
 async def _main() -> None:
-    parser = argparse.ArgumentParser(description="创建或管理智赢 AI 管理员账号")
+    parser = argparse.ArgumentParser(description="创建或管理智盈 AI 管理员账号")
     parser.add_argument("--email", required=True, help="管理员邮箱")
     parser.add_argument("--nickname", default="管理员", help="新建账号的昵称")
     parser.add_argument(

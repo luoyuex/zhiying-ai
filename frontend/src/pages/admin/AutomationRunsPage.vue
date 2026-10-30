@@ -103,7 +103,7 @@ onMounted(() => {
   <section class="flex flex-wrap items-end justify-between gap-4">
     <div>
       <p class="text-[13px] text-ink-3">
-        每个用户、每条任务线、每天一条；跳过的任务会写明原因
+        按用户与任务线记录每日执行结果，跳过的任务会写明原因
       </p>
       <h1 class="mt-1 text-[24px] font-semibold tracking-tight text-ink">定时执行记录</h1>
     </div>

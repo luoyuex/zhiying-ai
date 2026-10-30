@@ -69,7 +69,7 @@ onMounted(() => {
 <template>
   <section class="flex flex-wrap items-end justify-between gap-4">
       <div>
-        <p class="text-[13px] text-ink-3">只读本地数据，不主动请求行情源</p>
+        <p class="text-[13px] text-ink-3">平台账号、任务与额度消耗一览</p>
         <h1 class="mt-1 text-[24px] font-semibold tracking-tight text-ink">运营总览</h1>
       </div>
       <div class="flex items-center gap-2">
@@ -177,7 +177,7 @@ onMounted(() => {
           </div>
         </div>
 
-        <div class="rounded-lg border border-line bg-canvas p-5">
+        <div class="flex flex-col rounded-lg border border-line bg-canvas p-5">
           <div class="flex items-center justify-between">
             <h2 class="text-sm font-semibold text-ink">额度消耗 Top 5</h2>
             <span class="text-[11px] text-ink-3">{{ rangeLabel }}</span>
@@ -206,7 +206,9 @@ onMounted(() => {
               </div>
             </div>
           </div>
-          <p v-else class="mt-6 text-xs text-ink-3">今天还没有用户消耗额度。</p>
+          <p v-else class="grid flex-1 place-items-center py-6 text-xs text-ink-3">
+            今天还没有用户消耗额度。
+          </p>
         </div>
       </section>
 

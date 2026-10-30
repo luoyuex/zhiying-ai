@@ -175,7 +175,7 @@ onUnmounted(() => {
 <template>
   <section class="flex flex-wrap items-end justify-between gap-4">
     <div>
-      <p class="text-[13px] text-ink-3">任务台账来自 AI 任务落库记录，可重跑失败任务</p>
+      <p class="text-[13px] text-ink-3">查看任务状态、耗时与错误，失败任务可重跑</p>
       <h1 class="mt-1 text-[24px] font-semibold tracking-tight text-ink">任务中心</h1>
     </div>
     <div class="text-right text-[11px] text-ink-3">

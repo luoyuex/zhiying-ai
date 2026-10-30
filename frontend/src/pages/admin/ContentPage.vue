@@ -268,7 +268,7 @@ onUnmounted(() => {
 <template>
   <section class="flex flex-wrap items-end justify-between gap-4">
     <div>
-      <p class="text-[13px] text-ink-3">跨用户只读查看，用于定位用户反馈的问题</p>
+      <p class="text-[13px] text-ink-3">跨用户查看报告、选股与自选，用于定位用户反馈</p>
       <h1 class="mt-1 text-[24px] font-semibold tracking-tight text-ink">内容库</h1>
     </div>
     <div class="text-right text-[11px] text-ink-3">

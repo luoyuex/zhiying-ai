@@ -81,7 +81,7 @@ const router = createRouter({
           path: '',
           name: 'admin-overview',
           component: () => import('@/pages/admin/OverviewPage.vue'),
-          meta: { title: '后台概览' },
+          meta: { title: '运营总览' },
         },
         {
           path: 'costs',

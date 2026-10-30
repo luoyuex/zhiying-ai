@@ -30,7 +30,7 @@ const navGroups: { label: string; items: NavItem[] }[] = [
     ],
   },
   {
-    label: '用户',
+    label: '账号',
     items: [{ label: '用户与额度', to: '/admin/users' }],
   },
   {
@@ -96,9 +96,19 @@ onBeforeUnmount(() => {
       <aside
         class="sticky top-0 hidden h-screen w-56 shrink-0 flex-col border-r border-line bg-canvas px-3 py-5 md:flex"
       >
-        <RouterLink to="/admin" class="px-2">
-          <div class="text-sm font-semibold text-ink">智赢 AI</div>
-          <div class="mt-0.5 text-[11px] text-ink-3">管理后台</div>
+        <RouterLink to="/admin" class="flex items-center gap-2.5 px-2">
+          <img
+            src="/logo-mark-128.png"
+            alt=""
+            width="28"
+            height="28"
+            class="size-7 shrink-0"
+            aria-hidden="true"
+          />
+          <div class="leading-tight">
+            <div class="text-sm font-semibold text-ink">智盈 AI</div>
+            <div class="mt-0.5 text-[11px] text-ink-3">管理后台</div>
+          </div>
         </RouterLink>
 
         <nav class="mt-7 flex-1 space-y-5">
@@ -127,26 +137,41 @@ onBeforeUnmount(() => {
         </nav>
 
         <div class="border-t border-line pt-3">
-          <div class="truncate px-2 text-[11px] text-ink-3">
-            {{ auth.user?.email }}
+          <div class="px-2">
+            <div class="truncate text-[12px] font-medium text-ink">
+              {{ auth.user?.nickname || '管理员' }}
+            </div>
+            <div class="mt-0.5 truncate text-[11px] text-ink-3">
+              {{ auth.user?.email }}
+            </div>
           </div>
           <RouterLink
             to="/"
-            class="mt-2 block rounded-md px-2.5 py-2 text-[13px] text-ink-2 transition-colors hover:bg-surface hover:text-ink"
+            class="mt-2 flex items-center gap-1.5 rounded-md px-2.5 py-2 text-[13px] text-ink-2 transition-colors hover:bg-surface hover:text-ink"
           >
-            ← 返回工作台
+            <svg
+              class="size-3.5 shrink-0"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="1.8"
+              aria-hidden="true"
+            >
+              <path d="M14 6l-6 6 6 6" stroke-linecap="round" stroke-linejoin="round" />
+            </svg>
+            返回工作台
           </RouterLink>
         </div>
       </aside>
 
       <div class="min-w-0 flex-1">
         <header
-          class="sticky top-0 z-20 border-b border-line bg-canvas/85 backdrop-blur"
+          class="sticky top-0 z-20 border-b border-line bg-canvas/85 backdrop-blur md:hidden"
         >
-          <div class="flex h-14 items-center gap-2 px-3 md:gap-4 md:px-6">
+          <div class="flex h-14 items-center gap-2 px-3">
             <button
               type="button"
-              class="flex min-w-0 items-center gap-2 rounded-md py-1.5 pl-1 pr-2 text-left transition-colors active:bg-surface-2 md:hidden"
+              class="flex min-w-0 items-center gap-2 rounded-md py-1.5 pl-1 pr-2 text-left transition-colors active:bg-surface-2"
               aria-haspopup="dialog"
               :aria-expanded="navOpen"
               @click="openNav"
@@ -165,7 +190,7 @@ onBeforeUnmount(() => {
                 <span
                   class="block truncate text-[13px] font-semibold leading-tight text-ink"
                 >
-                  后台管理
+                  智盈 AI
                 </span>
                 <span
                   class="mt-0.5 block truncate text-[11px] leading-tight text-ink-3"
@@ -176,7 +201,7 @@ onBeforeUnmount(() => {
             </button>
             <RouterLink
               to="/"
-              class="ml-auto flex shrink-0 items-center gap-1 rounded-md px-2 py-2 text-xs text-ink-2 transition-colors active:bg-surface-2 md:hidden"
+              class="ml-auto flex shrink-0 items-center gap-1 rounded-md px-2 py-2 text-xs text-ink-2 transition-colors active:bg-surface-2"
             >
               <svg
                 class="size-3.5"
@@ -190,14 +215,6 @@ onBeforeUnmount(() => {
               </svg>
               工作台
             </RouterLink>
-            <div
-              class="ml-auto hidden items-center gap-4 text-[11px] text-ink-3 md:flex"
-            >
-              <span>{{ auth.user?.nickname }}</span>
-              <RouterLink to="/" class="transition-colors hover:text-ink">
-                返回工作台
-              </RouterLink>
-            </div>
           </div>
         </header>
 
@@ -219,7 +236,7 @@ onBeforeUnmount(() => {
         >
           <div class="flex items-start justify-between gap-3 px-5 pb-2 pt-4">
             <div class="min-w-0">
-              <div class="text-sm font-semibold text-ink">管理后台</div>
+              <div class="text-sm font-semibold text-ink">智盈 AI</div>
               <div class="mt-0.5 truncate text-[11px] text-ink-3">
                 {{ auth.user?.email }}
               </div>
