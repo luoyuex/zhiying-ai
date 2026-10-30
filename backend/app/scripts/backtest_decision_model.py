@@ -173,24 +173,31 @@ async def score_decision(
 # 3. K 线对齐与方向标签
 # ---------------------------------------------------------------------------
 
+def forward_bars(bars: list, decision_date) -> int:
+    """决策日之后有多少根日 K（先按时间升序，兼容不同 provider 的返回顺序）。"""
+    ordered = sorted(bars, key=lambda bar: bar.time)
+    return sum(1 for bar in ordered if bar.time.astimezone(TZ).date() > decision_date)
+
+
 def label_outcome(
     bars: list,
     decision_date,
     threshold_pct: float,
     horizon: int,
 ) -> dict | None:
-    """基准 = 严格晚于决策日的第一根 K 线；不足 horizon 根返回 None（样本太新）。"""
-    index = next(
-        (i for i, bar in enumerate(bars) if bar.time.astimezone(TZ).date() > decision_date),
-        None,
-    )
-    if index is None or index + horizon >= len(bars):
+    """基准 = 严格晚于决策日的第一根 K 线；不足 horizon 根返回 None（T+N 窗口未走完）。"""
+    after = [
+        bar
+        for bar in sorted(bars, key=lambda bar: bar.time)
+        if bar.time.astimezone(TZ).date() > decision_date
+    ]
+    if len(after) <= horizon:  # 需要 after[horizon] 存在
         return None
-    base = bars[index].close
+    base = after[0].close
     if base <= 0:
         return None
-    ret5 = bars[index + 5].close / base - 1 if index + 5 < len(bars) else None
-    ret20 = bars[index + horizon].close / base - 1
+    ret5 = after[5].close / base - 1 if len(after) > 5 else None
+    ret20 = after[horizon].close / base - 1
     label = "持有"
     if ret20 >= threshold_pct / 100:
         label = "买入"
@@ -259,9 +266,23 @@ def group_returns(samples: list[dict], key: str) -> dict[str, tuple[float, int]]
     }
 
 
-def summarize(samples: list[dict], threshold_pct: float, input_tokens: int) -> None:
+def summarize(samples: list[dict], threshold_pct: float, horizon: int, input_tokens: int) -> None:
     labeled = [s for s in samples if s["label"]]
-    # 决策模型统计只在调用成功的样本上进行，避免失败样本污染分母
+    if samples and not labeled:
+        # 没有任何一个样本能对齐后验收益——先诊断清楚是哪种情况
+        counts = sorted(s["forward_bars"] for s in samples)
+        mid = counts[len(counts) // 2]
+        latest = max(s["decision_date"] for s in samples)
+        print("0 个样本可对齐后验收益，决策 API 一次也没被调用（未消耗额度）。")
+        print(f"决策日之后的日 K 根数分布：最少 {counts[0]} / 中位 {mid} / 最多 {counts[-1]}"
+              f"（需要 > {horizon} 根才能生成 T+{horizon} 标签）")
+        if counts[-1] == 0:
+            print("全部样本的 K 线数据为空——检查行情接口在服务器上是否可达。")
+        else:
+            print(f"报告太新：最晚决策日 {latest}，T+{horizon} 窗口尚未走完。")
+            print("两个选择：① 等行情再走一段时间后重跑；"
+                  "② 先跑短线版（T+5 视角）：--horizon 5 --threshold 3")
+        return
     dm_labeled = [s for s in labeled if s["dm_ok"]]
     if not dm_labeled:
         print(f"有 {len(labeled)} 个可对齐样本，但决策模型调用全部失败——"
@@ -371,6 +392,7 @@ async def run(args: argparse.Namespace) -> None:
         outcome = label_outcome(
             klines.get(row.symbol, []), decision_date, args.threshold, args.horizon
         )
+        bars = klines.get(row.symbol, [])
         sample = {
             "symbol": row.symbol,
             "name": row.name,
@@ -383,6 +405,7 @@ async def run(args: argparse.Namespace) -> None:
             "p_up": None,
             "dm_ok": False,
             "agree": False,
+            "forward_bars": forward_bars(bars, decision_date),
             "ret5": outcome["ret5"] if outcome else None,
             "ret20": outcome["ret20"] if outcome else None,
             "label": outcome["label"] if outcome else "",
@@ -411,7 +434,7 @@ async def run(args: argparse.Namespace) -> None:
     async with httpx.AsyncClient() as client:
         await asyncio.gather(*(run_one(client, row) for row in reports))
 
-    summarize(samples, args.threshold, input_tokens)
+    summarize(samples, args.threshold, args.horizon, input_tokens)
     write_csv(samples, Path(args.csv))
 
     await close_redis()
