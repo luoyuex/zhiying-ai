@@ -14,6 +14,9 @@ import type {
   AdminJobItem,
   AdminJobRetryResponse,
   AdminOverview,
+  AdminQuotaPolicy,
+  AdminQuotaPolicyResult,
+  AdminQuotaPolicyUpdate,
   AdminResetQuotaResponse,
   AdminRevokeSessionsResponse,
   AdminSessionItem,
@@ -95,6 +98,14 @@ export const adminApi = {
 
   users(params: AdminUserQuery) {
     return http.get<Page<AdminUserListItem>>('/admin/users', { params })
+  },
+
+  quotaPolicy() {
+    return http.get<AdminQuotaPolicy>('/admin/quota-policy')
+  },
+
+  updateQuotaPolicy(payload: AdminQuotaPolicyUpdate) {
+    return http.put<AdminQuotaPolicyResult>('/admin/quota-policy', payload)
   },
 
   user(id: string) {

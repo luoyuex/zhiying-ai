@@ -19,6 +19,7 @@ from app.schemas.watchlist import (
     WatchlistBatchResult,
     WatchlistEntry,
 )
+from app.services.ai_analysis_service import QuotaExceededError
 from app.services.ai_job_service import AIWorkerUnavailableError, start_ai_job
 from app.services.market_service import MarketDataService
 from app.services.quote_batch import fetch_quotes
@@ -352,6 +353,15 @@ async def batch_analyze(
                     symbol=raw,
                     status="failed",
                     error_code="LLM_NOT_CONFIGURED",
+                    error_message=str(exc),
+                )
+            )
+        except QuotaExceededError as exc:
+            results.append(
+                WatchlistBatchResult(
+                    symbol=raw,
+                    status="failed",
+                    error_code="ANALYSIS_QUOTA_EXCEEDED",
                     error_message=str(exc),
                 )
             )

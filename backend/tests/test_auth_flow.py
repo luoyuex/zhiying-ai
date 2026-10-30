@@ -7,13 +7,17 @@ import uuid
 
 import pytest
 from httpx import ASGITransport, AsyncClient
-from sqlalchemy import delete
+from sqlalchemy import delete, select
 
 import app.api.v1.auth as auth_module
 from app.db.models.user import User
 from app.db.redis import get_redis
 from app.db.session import SessionLocal
 from app.main import app
+from app.services.platform_settings_service import (
+    get_default_daily_quota,
+    set_default_daily_quota,
+)
 
 PASSWORD = "zhiying2026"
 
@@ -84,6 +88,24 @@ async def test_register_and_me(client: AsyncClient, outbox: dict, email: str):
     )
     assert me.status_code == 200
     assert me.json()["nickname"] == "测试用户"
+
+
+async def test_register_uses_configured_default_quota(
+    client: AsyncClient, outbox: dict, email: str
+):
+    async with SessionLocal() as session:
+        before = await get_default_daily_quota(session)
+        await set_default_daily_quota(session, 7, admin_id=None)
+    try:
+        resp = await _register(client, outbox, email)
+        assert resp.status_code == 200, resp.text
+        async with SessionLocal() as session:
+            user = await session.scalar(select(User).where(User.email == email))
+        assert user is not None
+        assert user.daily_analysis_quota == 7
+    finally:
+        async with SessionLocal() as session:
+            await set_default_daily_quota(session, before, admin_id=None)
 
 
 async def test_duplicate_email(client: AsyncClient, outbox: dict, email: str):

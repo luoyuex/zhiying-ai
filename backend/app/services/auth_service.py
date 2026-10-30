@@ -14,6 +14,7 @@ from app.db.models.refresh_token import RefreshToken
 from app.db.models.user import User
 from app.schemas.auth import RegisterRequest
 from app.services.otp_service import OtpService
+from app.services.platform_settings_service import get_default_daily_quota
 
 logger = get_logger(__name__)
 
@@ -70,6 +71,8 @@ async def register(
         password_hash=security.hash_password(payload.password),
         email_verified_at=datetime.now(UTC),
         last_login_at=datetime.now(UTC),
+        # 新用户默认额度由后台配置决定，缺省 5 次/日
+        daily_analysis_quota=await get_default_daily_quota(db),
     )
     db.add(user)
     try:

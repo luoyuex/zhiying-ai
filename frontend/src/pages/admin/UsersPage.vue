@@ -9,7 +9,7 @@ import StatusPill from '@/components/admin/StatusPill.vue'
 import Button from '@/components/ui/Button.vue'
 import Input from '@/components/ui/Input.vue'
 import Select from '@/components/ui/Select.vue'
-import type { AdminUserListItem } from '@/types/admin'
+import type { AdminQuotaPolicy, AdminUserListItem } from '@/types/admin'
 import { getErrorMessage } from '@/utils/errors'
 import { formatFullDateTime } from '@/utils/report'
 
@@ -103,12 +103,63 @@ function openUser(id: string): void {
   void router.push(`/admin/users/${id}`)
 }
 
+const quotaPolicy = ref<AdminQuotaPolicy | null>(null)
+const quotaDefaultInput = ref('5')
+const applyToExisting = ref(false)
+const policyLoading = ref(true)
+const policySaving = ref(false)
+const policyError = ref('')
+const policyMessage = ref('')
+
+async function loadQuotaPolicy(): Promise<void> {
+  policyLoading.value = true
+  policyError.value = ''
+  try {
+    const { data } = await adminApi.quotaPolicy()
+    quotaPolicy.value = data
+    quotaDefaultInput.value = String(data.default_daily_quota)
+  } catch (err) {
+    policyError.value = getErrorMessage(err, '默认额度加载失败')
+  } finally {
+    policyLoading.value = false
+  }
+}
+
+async function saveQuotaPolicy(): Promise<void> {
+  if (policySaving.value) return
+  const value = Number(quotaDefaultInput.value)
+  if (!Number.isInteger(value) || value < 0 || value > 100) {
+    policyError.value = '默认额度需要是 0–100 的整数'
+    return
+  }
+  policySaving.value = true
+  policyError.value = ''
+  policyMessage.value = ''
+  try {
+    const { data } = await adminApi.updateQuotaPolicy({
+      default_daily_quota: value,
+      apply_to_existing: applyToExisting.value,
+    })
+    quotaPolicy.value = data
+    quotaDefaultInput.value = String(data.default_daily_quota)
+    policyMessage.value = data.updated_users
+      ? `已保存：新用户默认 ${data.default_daily_quota} 次/日，并同步 ${data.updated_users} 个普通用户`
+      : `已保存：新用户默认 ${data.default_daily_quota} 次/日`
+    if (data.updated_users) void load()
+  } catch (err) {
+    policyError.value = getErrorMessage(err, '默认额度保存失败')
+  } finally {
+    policySaving.value = false
+  }
+}
+
 watch([status, role, sort, order], () => {
   applyFilters()
 })
 
 onMounted(() => {
   void load()
+  void loadQuotaPolicy()
 })
 </script>
 
@@ -124,6 +175,39 @@ onMounted(() => {
         </div>
         <div class="mt-1">个账号</div>
       </div>
+    </section>
+
+    <section class="mt-6 rounded-lg border border-line bg-canvas px-4 py-4">
+      <div class="flex flex-wrap items-end justify-between gap-3">
+        <div class="min-w-0">
+          <h2 class="text-sm font-semibold text-ink">新用户默认额度</h2>
+          <p class="mt-1 text-[11px] leading-relaxed text-ink-3">
+            注册时写入用户的每日分析额度，只影响之后注册的账号；单个用户仍可在详情里单独调整。
+          </p>
+        </div>
+        <div class="flex flex-wrap items-center gap-3">
+          <label class="flex h-9 cursor-pointer items-center gap-1.5 text-xs text-ink-2">
+            <input v-model="applyToExisting" type="checkbox" class="size-3.5 accent-ink" />
+            同步现有普通用户
+          </label>
+          <div class="w-24">
+            <Input
+              v-model="quotaDefaultInput"
+              type="number"
+              inputmode="numeric"
+              aria-label="新用户默认额度"
+            />
+          </div>
+          <span class="text-xs text-ink-3">次/日</span>
+          <Button :loading="policySaving" @click="saveQuotaPolicy">保存</Button>
+        </div>
+      </div>
+      <p v-if="policyLoading" class="mt-3 text-[11px] text-ink-3">读取默认额度…</p>
+      <p v-if="quotaPolicy?.override_active" class="mt-3 rounded-md bg-surface px-3 py-2 text-[11px] text-warn">
+        全局额度覆盖已开启（{{ quotaPolicy.override_value }} 次/日），所有用户实际按覆盖值计算，这里保存的默认值暂不生效。
+      </p>
+      <p v-if="policyError" class="mt-2 text-[11px] text-danger">{{ policyError }}</p>
+      <p v-else-if="policyMessage" class="mt-2 text-[11px] text-ink-2">{{ policyMessage }}</p>
     </section>
 
     <section class="mt-6 rounded-lg border border-line bg-canvas">

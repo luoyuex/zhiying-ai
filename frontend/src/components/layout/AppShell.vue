@@ -3,6 +3,7 @@ import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
 
 import { useAuthStore } from '@/stores/auth'
+import AboutModal from './AboutModal.vue'
 import AccountCenterModal from './AccountCenterModal.vue'
 
 const auth = useAuthStore()
@@ -10,6 +11,7 @@ const route = useRoute()
 
 const menuOpen = ref(false)
 const accountOpen = ref(false)
+const aboutOpen = ref(false)
 const menuRoot = ref<HTMLElement | null>(null)
 
 interface NavItem {
@@ -31,6 +33,10 @@ function isActive(item: NavItem): boolean {
 
 const avatarText = computed(() => auth.user?.nickname?.trim().slice(0, 1) || '智')
 
+const roleLabel = computed(() =>
+  auth.user?.role === 'admin' ? '管理员' : '普通用户',
+)
+
 function closeMenu(): void {
   menuOpen.value = false
 }
@@ -38,6 +44,11 @@ function closeMenu(): void {
 function openAccount(): void {
   closeMenu()
   accountOpen.value = true
+}
+
+function openAbout(): void {
+  closeMenu()
+  aboutOpen.value = true
 }
 
 function onDocumentPointerDown(event: PointerEvent): void {
@@ -70,7 +81,10 @@ onBeforeUnmount(() => {
 
 watch(
   () => route.fullPath,
-  () => closeMenu(),
+  () => {
+    closeMenu()
+    aboutOpen.value = false
+  },
 )
 </script>
 
@@ -107,13 +121,29 @@ watch(
               class="absolute inset-x-3 bottom-0 h-0.5 rounded-full bg-ink"
             />
           </RouterLink>
+
+          <button
+            type="button"
+            class="relative flex h-14 items-center px-3 text-[13px] transition-colors"
+            :class="aboutOpen ? 'font-medium text-ink' : 'text-ink-3 hover:text-ink'"
+            aria-haspopup="dialog"
+            :aria-expanded="aboutOpen"
+            @click="openAbout"
+          >
+            关于
+            <span
+              v-if="aboutOpen"
+              class="absolute inset-x-3 bottom-0 h-0.5 rounded-full bg-ink"
+            />
+          </button>
         </nav>
 
         <div ref="menuRoot" class="relative ml-auto shrink-0 md:ml-0">
           <button
             type="button"
-            class="flex items-center gap-2 rounded-md p-1.5 transition-colors hover:bg-surface"
+            class="flex items-center rounded-full p-1 transition-colors hover:bg-surface-2"
             aria-haspopup="menu"
+            aria-label="打开用户菜单"
             :aria-expanded="menuOpen"
             @click="menuOpen = !menuOpen"
           >
@@ -121,33 +151,14 @@ watch(
               v-if="auth.user?.avatar_url"
               :src="auth.user.avatar_url"
               alt=""
-              class="size-8 shrink-0 rounded-full object-cover"
+              class="size-9 shrink-0 rounded-full object-cover ring-1 ring-line"
             />
             <span
               v-else
-              class="flex size-8 shrink-0 items-center justify-center rounded-full bg-primary-soft text-[13px] font-semibold text-primary"
+              class="flex size-9 shrink-0 items-center justify-center rounded-full bg-primary-soft text-[13px] font-semibold text-primary ring-1 ring-line"
             >
               {{ avatarText }}
             </span>
-            <span class="hidden text-left leading-tight sm:block">
-              <span class="block max-w-36 truncate text-[13px] font-medium text-ink">
-                {{ auth.user?.nickname }}
-              </span>
-              <span class="block max-w-36 truncate text-[11px] text-ink-3">
-                {{ auth.user?.email }}
-              </span>
-            </span>
-            <svg
-              class="size-3.5 shrink-0 text-ink-3 transition-transform duration-150"
-              :class="menuOpen ? 'rotate-180' : ''"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              stroke-width="1.8"
-              aria-hidden="true"
-            >
-              <path d="m6 9 6 6 6-6" stroke-linecap="round" stroke-linejoin="round" />
-            </svg>
           </button>
 
           <Transition name="fade-slide">
@@ -162,17 +173,29 @@ watch(
                   v-if="auth.user?.avatar_url"
                   :src="auth.user.avatar_url"
                   alt=""
-                  class="size-10 shrink-0 rounded-full object-cover"
+                  class="size-10 shrink-0 rounded-full object-cover ring-1 ring-line"
                 />
                 <span
                   v-else
-                  class="flex size-10 shrink-0 items-center justify-center rounded-full bg-primary-soft text-sm font-semibold text-primary"
+                  class="flex size-10 shrink-0 items-center justify-center rounded-full bg-primary-soft text-sm font-semibold text-primary ring-1 ring-line"
                 >
                   {{ avatarText }}
                 </span>
                 <div class="min-w-0 leading-tight">
-                  <div class="truncate text-[13px] font-semibold text-ink">
-                    {{ auth.user?.nickname }}
+                  <div class="flex items-center gap-1.5">
+                    <span class="truncate text-[13px] font-semibold text-ink">
+                      {{ auth.user?.nickname }}
+                    </span>
+                    <span
+                      class="shrink-0 rounded px-1 py-0.5 text-[10px]"
+                      :class="
+                        auth.user?.role === 'admin'
+                          ? 'bg-primary-soft text-primary'
+                          : 'bg-surface-2 text-ink-3'
+                      "
+                    >
+                      {{ roleLabel }}
+                    </span>
                   </div>
                   <div class="mt-1 truncate text-[11px] text-ink-3">
                     {{ auth.user?.email }}
@@ -294,6 +317,27 @@ watch(
                   <span class="flex-1">产品官网</span>
                   <span class="text-[11px] text-ink-3">↗</span>
                 </a>
+
+                <button
+                  type="button"
+                  role="menuitem"
+                  class="flex w-full items-center gap-2.5 rounded-md px-2.5 py-2 text-left text-[13px] text-ink-2 transition-colors hover:bg-surface hover:text-ink"
+                  @click="openAbout"
+                >
+                  <svg
+                    class="size-4 shrink-0"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="1.7"
+                    aria-hidden="true"
+                  >
+                    <circle cx="12" cy="12" r="8" />
+                    <path d="M12 11v5" stroke-linecap="round" />
+                    <path d="M12 7.75h.01" stroke-linecap="round" />
+                  </svg>
+                  关于与支持
+                </button>
               </div>
 
               <div class="border-t border-line p-1.5">
@@ -338,6 +382,21 @@ watch(
             class="absolute inset-x-0 bottom-0 h-0.5 rounded-full bg-ink"
           />
         </RouterLink>
+
+        <button
+          type="button"
+          class="relative flex h-10 shrink-0 items-center text-[13px] transition-colors"
+          :class="aboutOpen ? 'font-medium text-ink' : 'text-ink-3 hover:text-ink'"
+          aria-haspopup="dialog"
+          :aria-expanded="aboutOpen"
+          @click="openAbout"
+        >
+          关于我们
+          <span
+            v-if="aboutOpen"
+            class="absolute inset-x-0 bottom-0 h-0.5 rounded-full bg-ink"
+          />
+        </button>
       </nav>
     </header>
 
@@ -346,5 +405,6 @@ watch(
     </main>
 
     <AccountCenterModal v-model="accountOpen" />
+    <AboutModal v-model="aboutOpen" />
   </div>
 </template>

@@ -21,10 +21,21 @@ export interface ReportDetail {
   report: AIAnalysisResponse
 }
 
+export interface ReportStats {
+  total: number
+  stock_count: number
+}
+
 export const reportsApi = {
-  list(symbol?: string, limit = 6) {
+  list(symbol?: string, limit = 6, offset = 0, keyword?: string) {
     return http.get<ReportSummary[]>('/analysis/reports', {
-      params: { symbol, limit },
+      params: { symbol, limit, offset, keyword },
+    })
+  },
+
+  stats(keyword?: string) {
+    return http.get<ReportStats>('/analysis/reports/stats', {
+      params: { keyword },
     })
   },
 

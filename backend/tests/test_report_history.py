@@ -32,11 +32,11 @@ async def make_user() -> User:
     return user
 
 
-def make_report(symbol: str = "600519") -> AIAnalysisResponse:
+def make_report(symbol: str = "600519", name: str = "贵州茅台") -> AIAnalysisResponse:
     now = now_shanghai()
     return AIAnalysisResponse(
         symbol=symbol,
-        name="贵州茅台",
+        name=name,
         model="mock-model",
         prompt_version="multi_agent_decision.v1:test",
         generated_at=now,
@@ -114,6 +114,77 @@ async def test_reports_api():
 
             response = await client.get(f"/api/v1/analysis/reports/{uuid.uuid4()}")
             assert response.status_code == 404
+    finally:
+        app.dependency_overrides.clear()
+        async with SessionLocal() as session:
+            await session.execute(delete(User).where(User.id == user.id))
+            await session.commit()
+
+
+async def test_reports_pagination_search_and_stats():
+    user = await make_user()
+    try:
+        fixtures = [
+            ("600519", "贵州茅台"),
+            ("300750", "宁德时代"),
+            ("600036", "招商银行"),
+            ("000001", "平安银行"),
+            ("600519", "贵州茅台"),
+        ]
+        report_ids = [
+            await save_analysis_report(user.id, make_report(symbol, name))
+            for symbol, name in fixtures
+        ]
+
+        app.dependency_overrides[get_current_user] = lambda: user
+        transport = ASGITransport(app=app)
+        async with AsyncClient(transport=transport, base_url="http://testserver") as client:
+            seen: list[str] = []
+            for offset in (0, 2, 4):
+                response = await client.get(
+                    "/api/v1/analysis/reports",
+                    params={"limit": 2, "offset": offset},
+                )
+                assert response.status_code == 200, response.text
+                seen.extend(item["id"] for item in response.json())
+
+            assert len(seen) == 5
+            assert len(set(seen)) == 5
+            assert set(seen) == {str(report_id) for report_id in report_ids}
+
+            response = await client.get(
+                "/api/v1/analysis/reports",
+                params={"keyword": "600519"},
+            )
+            assert response.status_code == 200, response.text
+            body = response.json()
+            assert len(body) == 2
+            assert {item["symbol"] for item in body} == {"600519"}
+
+            response = await client.get(
+                "/api/v1/analysis/reports",
+                params={"keyword": "茅台"},
+            )
+            assert response.status_code == 200, response.text
+            assert len(response.json()) == 2
+
+            response = await client.get("/api/v1/analysis/reports/stats")
+            assert response.status_code == 200, response.text
+            assert response.json() == {"total": 5, "stock_count": 4}
+
+            response = await client.get(
+                "/api/v1/analysis/reports/stats",
+                params={"keyword": "600519"},
+            )
+            assert response.status_code == 200, response.text
+            assert response.json() == {"total": 2, "stock_count": 1}
+
+            response = await client.get(
+                "/api/v1/analysis/reports/stats",
+                params={"keyword": "不存在"},
+            )
+            assert response.status_code == 200, response.text
+            assert response.json() == {"total": 0, "stock_count": 0}
     finally:
         app.dependency_overrides.clear()
         async with SessionLocal() as session:

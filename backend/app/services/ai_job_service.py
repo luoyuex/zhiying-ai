@@ -38,6 +38,8 @@ from app.services.ai_analysis_service import (
     cache_ai_report,
     generate_ai_analysis,
     get_cached_ai_report,
+    read_quota_used,
+    seconds_to_midnight,
 )
 from app.services.job_ledger import (
     record_job_created,
@@ -232,6 +234,12 @@ async def start_ai_job(
             and (not force or active.force)
         ):
             return active
+
+    # 额度先于任何数据准备：用尽时直接拒绝，不创建任务、不拉行情；
+    # 与选股链路（start_screener_job）保持一致。
+    quota_used = await read_quota_used(redis, user_id, strict=True)
+    if quota_used >= daily_quota:
+        raise QuotaExceededError(daily_quota, seconds_to_midnight())
 
     if settings.ai_job_execution == "arq" and not await worker_alive(redis):
         raise AIWorkerUnavailableError("分析队列未启动，请先运行 npm run worker")

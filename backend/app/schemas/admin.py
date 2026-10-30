@@ -334,3 +334,21 @@ class AdminContentWatchlistItem(BaseModel):
     cost_price: float | None = None
     quantity: int | None = None
     created_at: datetime
+
+
+class AdminQuotaPolicy(BaseModel):
+    # 新注册用户的默认每日额度（users.daily_analysis_quota）
+    default_daily_quota: int
+    # 环境变量全局覆盖生效时，用户单独额度不参与实际限额
+    override_active: bool = False
+    override_value: int = 0
+
+
+class AdminQuotaPolicyUpdate(BaseModel):
+    default_daily_quota: int = Field(ge=0, le=100)
+    # 勾选后同时把新默认值写入现有普通用户
+    apply_to_existing: bool = False
+
+
+class AdminQuotaPolicyResult(AdminQuotaPolicy):
+    updated_users: int = 0

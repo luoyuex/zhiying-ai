@@ -4,6 +4,7 @@ from app.db.models.analysis_report import AnalysisReport
 from app.db.models.automation_run import AutomationRun
 from app.db.models.automation_settings import AutomationSettings
 from app.db.models.llm_call import LLMCall
+from app.db.models.platform_setting import PlatformSetting
 from app.db.models.portfolio_diagnosis import PortfolioDiagnosisRecord
 from app.db.models.position_change_log import PositionChangeLog
 from app.db.models.price_alert import PriceAlert
@@ -21,6 +22,7 @@ __all__ = [
     "AutomationRun",
     "AutomationSettings",
     "LLMCall",
+    "PlatformSetting",
     "PortfolioDiagnosisRecord",
     "PositionChangeLog",
     "PriceAlert",

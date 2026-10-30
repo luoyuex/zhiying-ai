@@ -134,6 +134,45 @@ if (revealAll) {
   }, 8000)
 }
 
+/* ---------- 深链锚点 ---------- */
+
+function scrollToInitialHash(): void {
+  if (!window.location.hash) return
+
+  const target = document.getElementById(window.location.hash.slice(1))
+  if (!target) return
+
+  const root = document.documentElement
+  const previous = root.style.scrollBehavior
+  root.style.scrollBehavior = 'auto'
+  target.scrollIntoView()
+  root.style.scrollBehavior = previous
+}
+
+if (document.readyState === 'complete') scrollToInitialHash()
+else window.addEventListener('load', scrollToInitialHash, { once: true })
+
+/* ---------- 捐赠二维码 ---------- */
+
+const qrImages = Array.from(document.querySelectorAll<HTMLImageElement>('[data-qr]'))
+
+qrImages.forEach((image) => {
+  const frame = image.closest<HTMLElement>('.donate-qr-frame')
+  if (!frame) return
+
+  const markReady = (): void => frame.classList.add('is-ready')
+  const markMissing = (): void => frame.classList.remove('is-ready')
+
+  if (image.complete) {
+    if (image.naturalWidth > 0) markReady()
+    else markMissing()
+    return
+  }
+
+  image.addEventListener('load', markReady, { once: true })
+  image.addEventListener('error', markMissing, { once: true })
+})
+
 /* ---------- 分析师标签页 ---------- */
 
 const tabs = Array.from(document.querySelectorAll<HTMLButtonElement>('[data-tab]'))

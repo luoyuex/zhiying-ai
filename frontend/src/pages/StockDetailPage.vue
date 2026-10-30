@@ -213,6 +213,8 @@ const aiQuotaLeft = computed(() => {
   return Math.max(config.daily_quota - config.quota_used, 0)
 })
 
+const aiQuotaExhausted = computed(() => aiQuotaLeft.value === 0)
+
 const aiGeneratedTime = computed(() => formatQuoteTime(aiReport.value?.generated_at))
 
 const dataGaps = computed(() => {
@@ -340,6 +342,10 @@ async function rerunAIAnalysis(): Promise<void> {
 
 async function submitAIAnalysis(force: boolean): Promise<void> {
   if (aiLoading.value || !aiConfig.value?.configured || !quote.value) return
+  if (aiQuotaExhausted.value) {
+    aiError.value = '今日 AI 分析额度已用完，明天 00:00 重置'
+    return
+  }
   stopAIPolling()
   const seq = ++aiRequestSeq
   aiLoading.value = true
@@ -365,6 +371,9 @@ async function submitAIAnalysis(force: boolean): Promise<void> {
     aiLoading.value = false
     if (getErrorCode(err) === 'LLM_NOT_CONFIGURED') {
       void loadAIConfig()
+    }
+    if (getErrorCode(err) === 'ANALYSIS_QUOTA_EXCEEDED' && aiConfig.value) {
+      aiConfig.value = { ...aiConfig.value, quota_used: aiConfig.value.daily_quota }
     }
   }
 }
@@ -819,7 +828,7 @@ onBeforeUnmount(() => {
                 v-if="aiReport"
                 type="button"
                 class="inline-flex h-7 items-center gap-1 rounded-md border border-line-strong bg-canvas px-2.5 text-xs font-medium text-ink-2 transition-colors hover:border-ink-3 hover:text-ink disabled:cursor-not-allowed disabled:opacity-50"
-                :disabled="aiLoading || !aiConfig?.configured"
+                :disabled="aiLoading || !aiConfig?.configured || aiQuotaExhausted"
                 title="跳过 6 小时缓存重新生成，消耗 1 次额度"
                 @click="rerunAIAnalysis"
               >
@@ -879,7 +888,7 @@ onBeforeUnmount(() => {
             <div class="flex flex-wrap items-center gap-3">
               <Button
                 :loading="aiLoading"
-                :disabled="aiLoading || !quote"
+                :disabled="aiLoading || !quote || aiQuotaExhausted"
                 @click="runAIAnalysis"
               >
                 {{ aiLoading ? '分析中…' : '开始 AI 分析' }}
@@ -887,6 +896,12 @@ onBeforeUnmount(() => {
               <span v-if="aiQuotaLeft !== null" class="text-[11px] text-ink-3">
                 今日剩余 {{ aiQuotaLeft }} 次
               </span>
+            </div>
+            <div
+              v-if="aiQuotaExhausted && !aiLoading"
+              class="mt-3 rounded-md bg-warn-soft px-3 py-2 text-[13px] text-warn"
+            >
+              今日 AI 分析额度已用完，明天 00:00 重置；已生成的历史报告可在下方查看。
             </div>
             <AIJobProgress v-if="aiLoading" class="mt-3" :phase="aiPhase" :elapsed="aiElapsed" />
             <p class="mt-2 text-[11px] leading-relaxed text-ink-3">

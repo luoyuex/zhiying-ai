@@ -1,8 +1,8 @@
 <script setup lang="ts">
-import { computed, onMounted, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 
-import { reportsApi, type ReportSummary } from '@/api/reports'
+import { reportsApi, type ReportStats, type ReportSummary } from '@/api/reports'
 import { watchlistApi, type PortfolioDiagnosisSummary } from '@/api/watchlist'
 import AppShell from '@/components/layout/AppShell.vue'
 import ReportListItem from '@/components/report/ReportListItem.vue'
@@ -14,15 +14,27 @@ import { dayLabel, formatFullDateTime } from '@/utils/report'
 
 type ReportTab = 'stock' | 'portfolio'
 
+const PAGE_SIZE = 20
+
 const route = useRoute()
 const router = useRouter()
 const activeTab = ref<ReportTab>(route.query.tab === 'portfolio' ? 'portfolio' : 'stock')
 const reports = ref<ReportSummary[]>([])
 const loading = ref(false)
+const loadingMore = ref(false)
 const error = ref('')
+const moreError = ref('')
+const hasMore = ref(false)
+const stats = ref<ReportStats | null>(null)
 const keyword = ref('')
+const activeQuery = ref('')
+const sentinelRef = ref<HTMLElement | null>(null)
 const selectMode = ref(false)
 const selected = ref<ReportSummary[]>([])
+
+let requestSeq = 0
+let searchTimer: ReturnType<typeof setTimeout> | null = null
+let observer: IntersectionObserver | null = null
 
 const portfolioReports = ref<PortfolioDiagnosisSummary[]>([])
 const portfolioLoading = ref(false)
@@ -99,19 +111,12 @@ function openCompare(): void {
 }
 
 const stockCount = computed(() => new Set(reports.value.map((item) => item.symbol)).size)
-
-const filtered = computed(() => {
-  const value = keyword.value.trim().toLowerCase()
-  if (!value) return reports.value
-  return reports.value.filter(
-    (item) =>
-      item.symbol.includes(value) || item.name.toLowerCase().includes(value),
-  )
-})
+const totalReports = computed(() => stats.value?.total ?? reports.value.length)
+const totalStocks = computed(() => stats.value?.stock_count ?? stockCount.value)
 
 const groups = computed(() => {
   const result: { key: string; label: string; items: ReportSummary[] }[] = []
-  for (const item of filtered.value) {
+  for (const item of reports.value) {
     const date = new Date(item.created_at)
     const key = `${date.getFullYear()}-${date.getMonth()}-${date.getDate()}`
     let group = result.find((entry) => entry.key === key)
@@ -124,22 +129,95 @@ const groups = computed(() => {
   return result
 })
 
-async function load(): Promise<void> {
-  loading.value = true
-  error.value = ''
+async function loadStats(seq: number, query: string): Promise<void> {
   try {
-    const { data } = await reportsApi.list(undefined, 50)
-    reports.value = data
-  } catch (err) {
-    reports.value = []
-    error.value = getErrorMessage(err, '历史报告加载失败')
-  } finally {
-    loading.value = false
+    const { data } = await reportsApi.stats(query || undefined)
+    if (seq !== requestSeq) return
+    stats.value = data
+  } catch {
+    // 统计失败不影响列表
   }
 }
 
+async function load(reset = true): Promise<void> {
+  if (!reset && (loading.value || loadingMore.value || !hasMore.value)) return
+
+  const seq = ++requestSeq
+  const query = reset ? keyword.value.trim() : activeQuery.value
+
+  if (reset) {
+    activeQuery.value = query
+    loading.value = true
+    loadingMore.value = false
+    error.value = ''
+    moreError.value = ''
+    hasMore.value = false
+    selected.value = []
+  } else {
+    loadingMore.value = true
+    moreError.value = ''
+  }
+
+  const offset = reset ? 0 : reports.value.length
+
+  try {
+    const { data } = await reportsApi.list(
+      undefined,
+      PAGE_SIZE + 1,
+      offset,
+      query || undefined,
+    )
+    if (seq !== requestSeq) return
+
+    const page = data.slice(0, PAGE_SIZE)
+    reports.value = reset ? page : [...reports.value, ...page]
+    hasMore.value = data.length > PAGE_SIZE
+
+    if (reset) void loadStats(seq, query)
+  } catch (err) {
+    if (seq !== requestSeq) return
+    if (reset) {
+      reports.value = []
+      hasMore.value = false
+      error.value = getErrorMessage(err, '历史报告加载失败')
+    } else {
+      moreError.value = getErrorMessage(err, '加载更多失败')
+    }
+  } finally {
+    if (seq === requestSeq) {
+      loading.value = false
+      loadingMore.value = false
+    }
+  }
+}
+
+function loadMore(): void {
+  if (activeTab.value !== 'stock') return
+  void load(false)
+}
+
+watch(keyword, () => {
+  if (searchTimer) clearTimeout(searchTimer)
+  searchTimer = setTimeout(() => {
+    if (activeTab.value !== 'stock') return
+    void load(true)
+  }, 300)
+})
+
 onMounted(() => {
   void load()
+  observer = new IntersectionObserver(
+    (entries) => {
+      if (entries.some((entry) => entry.isIntersecting)) loadMore()
+    },
+    { rootMargin: '240px 0px' },
+  )
+  if (sentinelRef.value) observer.observe(sentinelRef.value)
+})
+
+onBeforeUnmount(() => {
+  observer?.disconnect()
+  if (searchTimer) clearTimeout(searchTimer)
 })
 </script>
 
@@ -161,19 +239,19 @@ onMounted(() => {
         <h1 class="mt-1 text-[24px] font-semibold tracking-tight text-ink">历史报告</h1>
       </div>
       <div
-        v-if="activeTab === 'stock' ? reports.length : portfolioReports.length"
+        v-if="activeTab === 'stock' ? totalReports : portfolioReports.length"
         class="flex gap-5 text-right text-[11px] text-ink-3"
       >
         <template v-if="activeTab === 'stock'">
           <div>
             <div class="text-[20px] font-semibold leading-none tabular-nums text-ink">
-              {{ reports.length }}
+              {{ totalReports }}
             </div>
             <div class="mt-1">份报告</div>
           </div>
           <div>
             <div class="text-[20px] font-semibold leading-none tabular-nums text-ink">
-              {{ stockCount }}
+              {{ totalStocks }}
             </div>
             <div class="mt-1">只股票</div>
           </div>
@@ -192,7 +270,7 @@ onMounted(() => {
         class="flex flex-col gap-3 border-b border-line px-4 py-3 sm:flex-row sm:items-center sm:justify-between"
       >
         <div class="flex flex-wrap items-center gap-2">
-          <div class="flex rounded-md bg-surface p-0.5 text-xs">
+          <div class="flex h-8 items-center rounded-md bg-surface p-0.5 text-xs">
             <button
               type="button"
               class="rounded px-2.5 py-1 transition-colors"
@@ -211,10 +289,10 @@ onMounted(() => {
             </button>
           </div>
           <span
-            v-if="activeTab === 'stock' && reports.length"
+            v-if="activeTab === 'stock' && totalReports"
             class="rounded-full bg-surface-2 px-2 py-0.5 text-[11px] text-ink-3"
           >
-            {{ filtered.length }} 条
+            {{ totalReports }} 条
           </span>
           <span
             v-else-if="activeTab === 'portfolio' && portfolioReports.length"
@@ -229,10 +307,12 @@ onMounted(() => {
         >
           <Input
             v-model="keyword"
+            size="sm"
             class="min-w-0 flex-1 sm:w-64 sm:flex-none"
             placeholder="筛选股票代码或名称"
             aria-label="筛选历史报告"
             autocomplete="off"
+            maxlength="30"
           />
           <template v-if="selectMode">
             <span class="text-[11px] tabular-nums text-ink-3">已选 {{ selected.length }}/2</span>
@@ -259,27 +339,28 @@ onMounted(() => {
 
         <div v-else-if="error" class="px-4 py-10 text-center">
           <p class="text-sm text-danger">{{ error }}</p>
-          <Button variant="secondary" size="sm" class="mt-3" @click="load">重新加载</Button>
+          <Button variant="secondary" size="sm" class="mt-3" @click="load(true)">重新加载</Button>
         </div>
 
         <div
           v-else-if="!reports.length"
           class="px-4 py-14 text-center"
         >
-          <div class="text-sm font-medium text-ink">还没有分析报告</div>
-          <p class="mt-1 text-xs text-ink-3">
-            在个股详情页完成一次 AI 分析后，报告会自动保存在这里。
-          </p>
-          <Button variant="secondary" size="sm" class="mt-4" @click="router.push('/')">
-            去查询股票
-          </Button>
-        </div>
-
-        <div
-          v-else-if="!filtered.length"
-          class="px-4 py-12 text-center text-xs text-ink-3"
-        >
-          没有匹配「{{ keyword.trim() }}」的报告
+          <template v-if="keyword.trim()">
+            <div class="text-sm font-medium text-ink">没有匹配的报告</div>
+            <p class="mt-1 text-xs text-ink-3">
+              没有找到包含「{{ keyword.trim() }}」的股票代码或名称。
+            </p>
+          </template>
+          <template v-else>
+            <div class="text-sm font-medium text-ink">还没有分析报告</div>
+            <p class="mt-1 text-xs text-ink-3">
+              在个股详情页完成一次 AI 分析后，报告会自动保存在这里。
+            </p>
+            <Button variant="secondary" size="sm" class="mt-4" @click="router.push('/')">
+              去查询股票
+            </Button>
+          </template>
         </div>
 
         <div v-else>
@@ -352,6 +433,32 @@ onMounted(() => {
           </RouterLink>
         </div>
       </template>
+
+      <div
+        v-show="activeTab === 'stock' && reports.length > 0 && !loading && !error"
+        ref="sentinelRef"
+        class="flex items-center justify-center px-4 py-3 text-[11px] text-ink-3"
+        aria-live="polite"
+      >
+        <span v-if="loadingMore">正在加载更多…</span>
+        <button
+          v-else-if="moreError"
+          type="button"
+          class="text-danger underline underline-offset-2"
+          @click="loadMore"
+        >
+          加载失败，点击重试
+        </button>
+        <button
+          v-else-if="hasMore"
+          type="button"
+          class="transition-colors hover:text-ink"
+          @click="loadMore"
+        >
+          加载更多
+        </button>
+        <span v-else>已显示全部 {{ reports.length }} 条</span>
+      </div>
     </section>
   </AppShell>
 </template>

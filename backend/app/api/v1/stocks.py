@@ -20,6 +20,7 @@ from app.schemas.company import FundFlowData
 from app.schemas.news import CompanyNewsData
 from app.schemas.search import WebSearchResult
 from app.schemas.stock import StockSearchItem
+from app.services.ai_analysis_service import QuotaExceededError, QuotaServiceError
 from app.services.ai_job_service import AIWorkerUnavailableError, start_ai_job
 from app.services.company_news_service import get_company_news
 from app.services.market_service import MarketDataService
@@ -228,5 +229,9 @@ async def create_ai_analysis(
         raise errors.invalid_symbol(str(exc)) from exc
     except LLMNotConfiguredError as exc:
         raise errors.llm_not_configured() from exc
+    except QuotaExceededError as exc:
+        raise errors.analysis_quota_exceeded(exc.limit, exc.reset_seconds) from exc
+    except QuotaServiceError as exc:
+        raise errors.ai_service_unavailable(str(exc)) from exc
     except AIWorkerUnavailableError as exc:
         raise errors.ai_service_unavailable(str(exc)) from exc

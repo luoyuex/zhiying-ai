@@ -7,10 +7,13 @@ from httpx import ASGITransport, AsyncClient
 
 import app.api.v1.ai as ai_module
 import app.api.v1.stocks as stocks_module
+import app.services.ai_job_service as ai_job_service
 from app.core.config import settings
 from app.core.deps import get_current_user
 from app.db.models.user import User
+from app.db.redis import get_redis
 from app.main import app
+from app.services.ai_analysis_service import quota_key
 
 
 @pytest.fixture
@@ -63,6 +66,34 @@ async def test_ai_analysis_fails_clearly_when_unconfigured(
     body = response.json()
     assert body["code"] == "LLM_NOT_CONFIGURED"
     assert "LLM_BASE_URL" in body["message"]
+
+
+async def test_ai_analysis_quota_checked_before_job(client: AsyncClient, monkeypatch):
+    """额度用尽时在创建任务前就拒绝，不能先拉行情再失败。"""
+    monkeypatch.setattr(stocks_module, "is_llm_configured", lambda: True)
+    monkeypatch.setattr(ai_job_service, "is_llm_configured", lambda: True)
+    monkeypatch.setattr(settings, "ai_daily_quota_override", 0)
+
+    user = User(
+        id=uuid.uuid4(),
+        email="quota@example.com",
+        nickname="Quota",
+        daily_analysis_quota=1,
+    )
+    app.dependency_overrides[get_current_user] = lambda: user
+
+    redis = get_redis()
+    key = quota_key(user.id)
+    try:
+        await redis.set(key, 1, ex=60)
+        response = await client.post("/api/v1/stocks/600519/ai-analysis")
+    finally:
+        await redis.delete(key)
+
+    assert response.status_code == 429
+    body = response.json()
+    assert body["code"] == "ANALYSIS_QUOTA_EXCEEDED"
+    assert body["detail"]["reset_seconds"] > 0
 
 
 async def test_job_not_found(client: AsyncClient):

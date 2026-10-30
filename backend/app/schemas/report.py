@@ -24,3 +24,8 @@ class AnalysisReportDetail(BaseModel):
     id: uuid.UUID
     created_at: datetime
     report: AIAnalysisResponse
+
+
+class AnalysisReportStats(BaseModel):
+    total: int
+    stock_count: int

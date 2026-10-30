@@ -22,6 +22,10 @@ from app.services.job_ledger import (
     record_job_running,
     record_job_succeeded,
 )
+from app.services.platform_settings_service import (
+    get_default_daily_quota,
+    set_default_daily_quota,
+)
 
 
 class FakeRedis:
@@ -178,6 +182,44 @@ async def test_admin_user_list_update_reset_and_revoke():
         assert set(actions) == {"user.update", "user.reset_quota", "user.revoke_sessions"}
 
     await cleanup(admin, target)
+
+
+async def test_admin_quota_policy_read_write():
+    admin = await make_user(role="admin", nickname="Boss")
+    async with SessionLocal() as session:
+        before = await get_default_daily_quota(session)
+
+    app.dependency_overrides[get_current_user] = lambda: admin
+    try:
+        transport = ASGITransport(app=app)
+        async with AsyncClient(transport=transport, base_url="http://testserver") as client:
+            response = await client.get("/api/v1/admin/quota-policy")
+            assert response.status_code == 200, response.text
+            body = response.json()
+            assert body["default_daily_quota"] == before
+            assert body["override_active"] == (settings.ai_daily_quota_override > 0)
+
+            response = await client.put(
+                "/api/v1/admin/quota-policy", json={"default_daily_quota": 7}
+            )
+            assert response.status_code == 200, response.text
+            body = response.json()
+            assert body["default_daily_quota"] == 7
+            # 未勾选同步时不动现有用户
+            assert body["updated_users"] == 0
+
+            response = await client.put(
+                "/api/v1/admin/quota-policy", json={"default_daily_quota": 101}
+            )
+            assert response.status_code == 422
+
+        async with SessionLocal() as session:
+            assert await get_default_daily_quota(session) == 7
+    finally:
+        async with SessionLocal() as session:
+            await set_default_daily_quota(session, before, admin_id=None)
+        app.dependency_overrides.clear()
+        await cleanup(admin)
 
 
 async def test_admin_cannot_ban_admin_account():

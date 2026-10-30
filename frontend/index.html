@@ -257,6 +257,7 @@
           <a href="#workflow" data-section="workflow">工作流</a>
           <a href="#evidence" data-section="evidence">证据链</a>
           <a href="#faq" data-section="faq">常见问题</a>
+          <a href="#about" data-section="about">关于</a>
         </nav>
 
         <div class="header-actions">
@@ -284,6 +285,7 @@
         <a href="#workflow" data-menu-link><span>04</span>工作流</a>
         <a href="#evidence" data-menu-link><span>05</span>证据链</a>
         <a href="#faq" data-menu-link><span>06</span>常见问题</a>
+        <a href="#about" data-menu-link><span>07</span>关于与支持</a>
       </nav>
       <div class="mobile-actions">
         <a class="btn btn--primary" href="/app/register">开始使用</a>
@@ -1330,10 +1332,153 @@
         </div>
       </section>
 
+      <!-- 关于与支持：收款码图片放到 frontend/public/donate/ 下，文件名 wechat.png 与 alipay.png -->
+      <section class="section section--about" id="about" aria-labelledby="about-title">
+        <div class="shell section-grid">
+          <div class="section-label">
+            <span class="section-num">07</span>
+            <span class="section-name">关于我们</span>
+          </div>
+
+          <div class="section-body">
+            <h2 id="about-title" data-reveal>这个站点由一个人维护，也靠愿意支持它的人维持。</h2>
+
+            <p class="lede" data-reveal>
+              智盈 AI 是我在业余时间维护的个人项目。没有公司主体，没有融资，也没有广告、会员或付费课程。站点以个人名义备案，功能免费开放，所有输出只作为研究参考。
+            </p>
+
+            <div class="about-grid">
+              <div class="about-story" data-reveal>
+                <p>
+                  做它的原因很直接：看一只股票时，技术面、基本面、资金和消息往往散在不同地方，最后容易只剩一个涨跌判断。我想把取证、讨论和决策的过程留下来，方便事后复盘。
+                </p>
+                <p>
+                  站点每天需要拉行情、跑模型、存报告。服务器、数据接口和模型调用都是按月计费的成本，随着使用的人变多，这笔开销也在慢慢变大。
+                </p>
+                <p>
+                  不捐不影响任何功能，也没有档位或回报。如果你觉得它确实省下了你的时间，可以扫码支持一下；有别的建议，也欢迎直接发邮件。
+                </p>
+
+                <dl class="about-facts">
+                  <div><dt>运营方式</dt><dd>个人业余维护</dd></div>
+                  <div><dt>站点性质</dt><dd>非商业 · 个人备案</dd></div>
+                  <div><dt>费用去向</dt><dd>服务器 · 数据接口 · 模型调用</dd></div>
+                  <div><dt>功能政策</dt><dd>全部免费，不设付费墙</dd></div>
+                </dl>
+              </div>
+
+              <aside class="donate" id="donate" aria-labelledby="donate-title" data-reveal>
+                <span class="micro">VOLUNTARY SUPPORT</span>
+                <h3 id="donate-title">让服务器继续跑下去</h3>
+                <p>
+                  捐赠全部用于覆盖站点的固定开销，金额随意。它不购买服务，也不换取任何权益。
+                </p>
+
+                <ul class="donate-uses">
+                  <li><span>服务器与带宽</span><span>固定月度开销</span></li>
+                  <li><span>行情与财务数据</span><span>按接口调用</span></li>
+                  <li><span>AI 模型调用</span><span>随分析次数增长</span></li>
+                </ul>
+
+                <div class="donate-qr">
+                  <figure class="donate-method">
+                    <div class="donate-qr-frame">
+                      <img
+                        src="/donate/wechat.png"
+                        alt="微信赞赏码"
+                        width="320"
+                        height="320"
+                        data-qr
+                      />
+                      <span class="donate-qr-fallback">
+                        <svg
+                          viewBox="0 0 24 24"
+                          fill="none"
+                          stroke="currentColor"
+                          stroke-width="1.5"
+                          aria-hidden="true"
+                        >
+                          <rect x="3.5" y="3.5" width="6" height="6" rx="1" />
+                          <rect x="14.5" y="3.5" width="6" height="6" rx="1" />
+                          <rect x="3.5" y="14.5" width="6" height="6" rx="1" />
+                          <path
+                            d="M14.5 14.5h2.5v2.5h-2.5zM19 19h1.5v1.5H19zM14.5 20.5H17M20.5 14.5V17"
+                            stroke-linecap="round"
+                          />
+                        </svg>
+                        赞赏码准备中
+                      </span>
+                    </div>
+                    <figcaption>微信</figcaption>
+                  </figure>
+                  <figure class="donate-method">
+                    <div class="donate-qr-frame">
+                      <img
+                        src="/donate/alipay.png"
+                        alt="支付宝收款码"
+                        width="320"
+                        height="320"
+                        data-qr
+                      />
+                      <span class="donate-qr-fallback">
+                        <svg
+                          viewBox="0 0 24 24"
+                          fill="none"
+                          stroke="currentColor"
+                          stroke-width="1.5"
+                          aria-hidden="true"
+                        >
+                          <rect x="3.5" y="3.5" width="6" height="6" rx="1" />
+                          <rect x="14.5" y="3.5" width="6" height="6" rx="1" />
+                          <rect x="3.5" y="14.5" width="6" height="6" rx="1" />
+                          <path
+                            d="M14.5 14.5h2.5v2.5h-2.5zM19 19h1.5v1.5H19zM14.5 20.5H17M20.5 14.5V17"
+                            stroke-linecap="round"
+                          />
+                        </svg>
+                        收款码准备中
+                      </span>
+                    </div>
+                    <figcaption>支付宝</figcaption>
+                  </figure>
+                </div>
+
+                <p class="donate-note">
+                  扫码或长按识别。个人收款，不开具发票，也不构成任何服务承诺。
+                </p>
+              </aside>
+            </div>
+
+            <dl class="about-meta" data-reveal>
+              <div>
+                <dt>备案信息</dt>
+                <dd>
+                  <a href="https://beian.miit.gov.cn/" target="_blank" rel="noopener">
+                    京ICP备XXXXXXXX号
+                  </a>
+                </dd>
+              </div>
+              <div>
+                <dt>联系邮箱</dt>
+                <dd><a href="mailto:hello@zhenguolian.cn">hello@zhenguolian.cn</a></dd>
+              </div>
+              <div>
+                <dt>数据来源</dt>
+                <dd>腾讯 · 新浪 · 东方财富</dd>
+              </div>
+              <div>
+                <dt>内容边界</dt>
+                <dd>研究参考，不构成投资建议</dd>
+              </div>
+            </dl>
+          </div>
+        </div>
+      </section>
+
       <section class="closing" aria-labelledby="closing-title">
         <div class="shell closing-inner">
           <div class="closing-copy">
-            <span class="micro micro--light">07 / 开始</span>
+            <span class="micro micro--light">08 / 开始</span>
             <h2 id="closing-title" data-reveal>下一次出手前，<br />先把证据摆上桌。</h2>
             <p data-reveal>
               从一只股票开始，跑完六位分析师、团队讨论与首席决策。把结论和依据一起留下，下一次复盘才有东西可对。
@@ -1389,6 +1534,8 @@
                 <a href="#analysts">六位分析师</a>
                 <a href="#strategies">选股策略</a>
                 <a href="#faq">常见问题</a>
+                <a href="#about">关于我们</a>
+                <a href="#donate">捐赠支持</a>
               </nav>
 
               <div class="footer-col">
@@ -1408,7 +1555,13 @@
 
             <div class="footer-bottom">
               <span>© 2026 智盈 AI</span>
-              <span>研究参考 · 不构成投资建议</span>
+              <span class="footer-legal">
+                <a href="https://beian.miit.gov.cn/" target="_blank" rel="noopener">
+                  京ICP备XXXXXXXX号
+                </a>
+                <a href="mailto:hello@zhenguolian.cn">hello@zhenguolian.cn</a>
+                <span>研究参考 · 不构成投资建议</span>
+              </span>
             </div>
           </div>
         </footer>

@@ -234,7 +234,10 @@ async def _enqueue_watchlist_analysis(
             )
             enqueued += 1
         except QuotaExceededError:
-            raise
+            # 入队时就会校验额度；并发消耗导致中途用尽时，已入队的照常执行
+            if enqueued == 0:
+                raise
+            break
         except Exception as exc:  # noqa: BLE001 - 单只失败不影响其余自选
             logger.warning("定时分析入队失败 user=%s symbol=%s: %s", user.id, symbol, exc)
     return enqueued

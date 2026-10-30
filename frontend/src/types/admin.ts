@@ -72,6 +72,21 @@ export interface AdminUserUpdate {
   status?: 'active' | 'banned'
 }
 
+export interface AdminQuotaPolicy {
+  default_daily_quota: number
+  override_active: boolean
+  override_value: number
+}
+
+export interface AdminQuotaPolicyUpdate {
+  default_daily_quota: number
+  apply_to_existing?: boolean
+}
+
+export interface AdminQuotaPolicyResult extends AdminQuotaPolicy {
+  updated_users: number
+}
+
 export interface AdminSessionItem {
   id: string
   ip: string | null

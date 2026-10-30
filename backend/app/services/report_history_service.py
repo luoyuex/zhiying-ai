@@ -2,7 +2,7 @@
 
 import uuid
 
-from sqlalchemy import select
+from sqlalchemy import distinct, func, or_, select
 
 from app.core.logging import get_logger
 from app.db.models.analysis_report import AnalysisReport
@@ -14,7 +14,11 @@ from app.schemas.portfolio import (
     PortfolioDiagnosisResponse,
     PortfolioDiagnosisSummary,
 )
-from app.schemas.report import AnalysisReportDetail, AnalysisReportSummary
+from app.schemas.report import (
+    AnalysisReportDetail,
+    AnalysisReportStats,
+    AnalysisReportSummary,
+)
 
 logger = get_logger(__name__)
 
@@ -77,21 +81,44 @@ async def save_analysis_report(
         return row.id
 
 
+def _keyword_pattern(value: str) -> str:
+    escaped = value.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+    return f"%{escaped}%"
+
+
+def _apply_report_filters(stmt, *, symbol: str | None = None, keyword: str | None = None):
+    if symbol:
+        stmt = stmt.where(AnalysisReport.symbol == symbol)
+    if keyword:
+        pattern = _keyword_pattern(keyword)
+        stmt = stmt.where(
+            or_(
+                AnalysisReport.symbol.ilike(pattern, escape="\\"),
+                AnalysisReport.name.ilike(pattern, escape="\\"),
+            )
+        )
+    return stmt
+
+
 async def list_analysis_reports(
     user_id: object,
     *,
     symbol: str | None = None,
+    keyword: str | None = None,
     limit: int = 10,
+    offset: int = 0,
 ) -> list[AnalysisReportSummary]:
+    stmt = _apply_report_filters(
+        select(AnalysisReport).where(AnalysisReport.user_id == user_id),
+        symbol=symbol,
+        keyword=keyword,
+    )
+    stmt = (
+        stmt.order_by(AnalysisReport.created_at.desc(), AnalysisReport.id.desc())
+        .offset(offset)
+        .limit(limit)
+    )
     async with SessionLocal() as session:
-        stmt = (
-            select(AnalysisReport)
-            .where(AnalysisReport.user_id == user_id)
-            .order_by(AnalysisReport.created_at.desc())
-            .limit(limit)
-        )
-        if symbol:
-            stmt = stmt.where(AnalysisReport.symbol == symbol)
         rows = (await session.scalars(stmt)).all()
 
     summaries: list[AnalysisReportSummary] = []
@@ -113,6 +140,23 @@ async def list_analysis_reports(
             )
         )
     return summaries
+
+
+async def get_analysis_report_stats(
+    user_id: object,
+    *,
+    keyword: str | None = None,
+) -> AnalysisReportStats:
+    stmt = _apply_report_filters(
+        select(
+            func.count(AnalysisReport.id),
+            func.count(distinct(AnalysisReport.symbol)),
+        ).where(AnalysisReport.user_id == user_id),
+        keyword=keyword,
+    )
+    async with SessionLocal() as session:
+        total, stock_count = (await session.execute(stmt)).one()
+    return AnalysisReportStats(total=int(total or 0), stock_count=int(stock_count or 0))
 
 
 async def get_analysis_report(
