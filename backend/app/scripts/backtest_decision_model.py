@@ -104,14 +104,14 @@ def build_state(row: AnalysisReport) -> dict:
 # 2. SystemOne 决策调用（choice 评级题 + noul 是非题）
 # ---------------------------------------------------------------------------
 
-def build_questions(threshold_pct: float) -> dict:
-    """题目定义与回测标签规则对齐（±threshold%），保证评测语义一致。"""
+def build_questions(threshold_pct: float, horizon: int) -> dict:
+    """题目定义与回测标签规则对齐（±threshold%、T+horizon），保证评测语义一致。"""
     up = f"+{threshold_pct:g}%"
     down = f"-{threshold_pct:g}%"
     return {
         "rating": {
             "type": "choice",
-            "instructions": "该股未来 20 个交易日最合理的操作评级是？",
+            "instructions": f"该股未来 {horizon} 个交易日最合理的操作评级是？",
             "criteria": {
                 "买入": f"六维证据偏多，预期持有期收盘涨幅达到 {up}",
                 "持有": "多空证据大体平衡，预期涨幅在正负阈值之间震荡",
@@ -120,7 +120,7 @@ def build_questions(threshold_pct: float) -> dict:
         },
         "upside": {
             "type": "noul",
-            "instructions": f"未来 20 个交易日，该股收盘价涨幅是否达到 {up}？",
+            "instructions": f"未来 {horizon} 个交易日，该股收盘价涨幅是否达到 {up}？",
             "criteria": {
                 "true": f"涨幅达到或超过 {up}",
                 "false": f"涨幅不足 {up}（含持平与下跌）",
@@ -271,17 +271,22 @@ def summarize(samples: list[dict], threshold_pct: float, horizon: int, input_tok
     if samples and not labeled:
         # 没有任何一个样本能对齐后验收益——先诊断清楚是哪种情况
         counts = sorted(s["forward_bars"] for s in samples)
-        mid = counts[len(counts) // 2]
         latest = max(s["decision_date"] for s in samples)
         print("0 个样本可对齐后验收益，决策 API 一次也没被调用（未消耗额度）。")
-        print(f"决策日之后的日 K 根数分布：最少 {counts[0]} / 中位 {mid} / 最多 {counts[-1]}"
-              f"（需要 > {horizon} 根才能生成 T+{horizon} 标签）")
+        print(f"最晚决策日 {latest}；决策日之后的日 K 根数："
+              f"最少 {counts[0]} / 中位 {counts[len(counts) // 2]} / 最多 {counts[-1]}")
         if counts[-1] == 0:
             print("全部样本的 K 线数据为空——检查行情接口在服务器上是否可达。")
-        else:
-            print(f"报告太新：最晚决策日 {latest}，T+{horizon} 窗口尚未走完。")
-            print("两个选择：① 等行情再走一段时间后重跑；"
-                  "② 先跑短线版（T+5 视角）：--horizon 5 --threshold 3")
+            return
+        best = counts[-1]
+        print(f"\n各持有期当前能对齐的样本数（共 {len(samples)} 份报告）：")
+        for h, th in ((1, 2), (3, 3), (5, 3), (10, 4), (20, 5)):
+            usable = sum(1 for s in samples if s["forward_bars"] > h)
+            wait = max(0, h + 1 - best)
+            note = "现在就能跑" if not wait else f"约 {wait} 个交易日后可跑"
+            print(f"  T+{h:<2} (±{th}%): 可对齐 {usable} 份 | {note}")
+        print("\n说明：T+1/T+3 噪声较大，只适合验证调用链路；"
+              "\n正式回测建议等 T+20 窗口走完，届时样本量也会自然增长。")
         return
     dm_labeled = [s for s in labeled if s["dm_ok"]]
     if not dm_labeled:
@@ -379,7 +384,7 @@ async def run(args: argparse.Namespace) -> None:
         if index % 20 == 0:
             print(f"K 线进度 {index}/{len(symbols)}")
 
-    questions = build_questions(args.threshold)
+    questions = build_questions(args.threshold, args.horizon)
     semaphore = asyncio.Semaphore(args.concurrency)
     progress = 0
     input_tokens = 0
