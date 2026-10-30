@@ -14,6 +14,7 @@ import {
   usePriceAlertsVersion,
 } from '@/composables/usePriceAlertsSync'
 import { useAuthStore } from '@/stores/auth'
+import { alertActionLabel, alertTargetText } from '@/utils/alerts'
 import { getErrorMessage } from '@/utils/errors'
 import { formatSourceList } from '@/utils/market'
 import { formatDateTime, ratingChangeBadge, ratingTone } from '@/utils/report'
@@ -128,26 +129,8 @@ const latestChange = computed(() =>
   ratingChangeBadge(props.item.latest?.rating_change, props.item.latest?.prev_rating),
 )
 
-function directionLabel(direction: string): string {
-  return direction === 'above' ? '涨到' : '跌破'
-}
-
-function alertLabel(alert: PriceAlert): string {
-  if (alert.kind === 'entry') return '入场'
-  if (alert.kind === 'take_profit') return '止盈'
-  if (alert.kind === 'stop_loss') return '止损'
-  return directionLabel(alert.direction)
-}
-
-function alertThreshold(alert: PriceAlert): string {
-  if (alert.kind === 'entry' || alert.kind === 'stop_loss') {
-    return `≤ ${alert.target_price.toFixed(2)}`
-  }
-  if (alert.kind === 'take_profit') {
-    return `≥ ${alert.target_price.toFixed(2)}`
-  }
-  return alert.target_price.toFixed(2)
-}
+const alertLabel = alertActionLabel
+const alertThreshold = alertTargetText
 
 const symbolAlerts = computed(() =>
   (alerts.value ?? []).filter((alert) => alert.symbol === props.item.symbol),

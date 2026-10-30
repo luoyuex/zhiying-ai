@@ -18,6 +18,24 @@ export function formatDateTime(iso: string): string {
   })
 }
 
+/** 最近记录场景：今天 / 昨天 + 时分，跨年补年份，避免 MMDD 被误读 */
+export function formatRecentDateTime(iso: string): string {
+  const date = new Date(iso)
+  if (Number.isNaN(date.getTime())) return ''
+  const pad = (value: number) => String(value).padStart(2, '0')
+  const time = `${pad(date.getHours())}:${pad(date.getMinutes())}`
+  const now = new Date()
+  const startOfDay = (value: Date) =>
+    new Date(value.getFullYear(), value.getMonth(), value.getDate()).getTime()
+  const dayDiff = Math.round((startOfDay(now) - startOfDay(date)) / 86_400_000)
+  if (dayDiff === 0) return `今天 ${time}`
+  if (dayDiff === 1) return `昨天 ${time}`
+  if (date.getFullYear() === now.getFullYear()) {
+    return `${pad(date.getMonth() + 1)}/${pad(date.getDate())} ${time}`
+  }
+  return `${date.getFullYear()}/${pad(date.getMonth() + 1)}/${pad(date.getDate())} ${time}`
+}
+
 export function formatFullDateTime(iso: string): string {
   const date = new Date(iso)
   const pad = (value: number) => String(value).padStart(2, '0')
@@ -27,7 +45,7 @@ export function formatFullDateTime(iso: string): string {
 export function ratingTone(rating: string): string {
   if (rating === '买入' || rating === '看多') return 'bg-up-soft text-up'
   if (rating === '卖出' || rating === '看空') return 'bg-down-soft text-down'
-  return 'bg-surface-2 text-ink-2'
+  return 'bg-surface-2 text-ink'
 }
 
 /** 评级变化标记：本次结论与上一份报告对比（持平不展示，避免噪音） */

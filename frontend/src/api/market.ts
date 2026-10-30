@@ -107,9 +107,21 @@ export interface StockSearchItem {
   exchange: string
 }
 
+export interface HotStockItem {
+  code: string
+  name: string
+  price: number | null
+  change_pct: number | null
+}
+
 export const marketApi = {
   searchStocks(q: string, limit = 8) {
     return http.get<StockSearchItem[]>('/stocks/search', { params: { q, limit } })
+  },
+
+  /** 按当日成交额排序的活跃榜；取数失败时后端返回空数组 */
+  hotStocks(limit = 8) {
+    return http.get<HotStockItem[]>('/stocks/hot', { params: { limit } })
   },
 
   quote(symbol: string) {

@@ -10,7 +10,7 @@ from app.core.logging import get_logger
 from app.db.models.user import User
 from app.db.redis import get_redis
 from app.llm.client import LLMNotConfiguredError, is_llm_configured
-from app.providers.base import DataNotFound, MarketUnavailable
+from app.providers.base import DataNotFound, MarketUnavailable, ProviderError
 from app.providers.fundflow import get_fund_flow
 from app.providers.models import Adjust, KlinePeriod, KlineSeries, Quote
 from app.providers.symbols import InvalidSymbolError, parse_symbol
@@ -19,10 +19,11 @@ from app.schemas.analysis import TechnicalAnalysis
 from app.schemas.company import FundFlowData
 from app.schemas.news import CompanyNewsData
 from app.schemas.search import WebSearchResult
-from app.schemas.stock import StockSearchItem
+from app.schemas.stock import HotStockItem, StockSearchItem
 from app.services.ai_analysis_service import QuotaExceededError, QuotaServiceError
 from app.services.ai_job_service import AIWorkerUnavailableError, start_ai_job
 from app.services.company_news_service import get_company_news
+from app.services.hot_stock_service import load_hot_stocks
 from app.services.market_service import MarketDataService
 from app.services.stock_directory_service import search_stocks as search_stock_directory
 from app.services.technical_analysis import InsufficientDataError, analyze_technicals
@@ -58,6 +59,20 @@ async def search_stocks(
     return await search_stock_directory(q, limit=limit)
 
 
+@router.get("/hot", response_model=list[HotStockItem], summary="热门股票")
+async def hot_stocks(
+    limit: int = Query(8, ge=1, le=20, description="返回条数"),
+    _: User = Depends(get_current_user),
+    redis: Redis = Depends(get_redis),
+) -> list[HotStockItem]:
+    """按当日成交额排序的活跃榜；取数失败返回空列表，由前端兜底。"""
+    try:
+        return await load_hot_stocks(redis, limit=limit)
+    except ProviderError as exc:
+        logger.warning("热门股票加载失败: %s", exc)
+        return []
+
+
 @router.get("/{symbol}/quote", response_model=Quote, summary="实时报价")
 async def get_quote(
     symbol: str,
@@ -85,9 +100,7 @@ async def get_kline(
     service: MarketDataService = Depends(get_market_service),
 ) -> KlineSeries:
     try:
-        return await service.get_kline(
-            symbol, period=period, adjust=adjust, limit=limit
-        )
+        return await service.get_kline(symbol, period=period, adjust=adjust, limit=limit)
     except InvalidSymbolError as exc:
         raise errors.invalid_symbol(str(exc)) from exc
     except DataNotFound as exc:

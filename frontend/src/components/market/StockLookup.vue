@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 
 import { marketApi, type StockSearchItem } from '@/api/market'
@@ -16,6 +16,14 @@ const HOT_STOCKS = [
 
 const EXCHANGE_LABEL: Record<string, string> = { SH: '沪', SZ: '深', BJ: '京' }
 const DEBOUNCE_MS = 250
+const RECENT_KEY = 'zhiying.recent-stocks'
+const RECENT_LIMIT = 3
+const QUICK_LIMIT = 4
+
+interface QuickPick {
+  code: string
+  name: string
+}
 
 const router = useRouter()
 const keyword = ref('')
@@ -26,11 +34,58 @@ const open = ref(false)
 const searching = ref(false)
 const activeIndex = ref(-1)
 const root = ref<HTMLElement | null>(null)
+const recent = ref<QuickPick[]>(readRecent())
+const hot = ref<QuickPick[]>([])
+const hotLoading = ref(false)
+
+const quickPicks = computed<QuickPick[]>(() => {
+  if (recent.value.length) return recent.value
+  if (hot.value.length) return hot.value.slice(0, QUICK_LIMIT)
+  return HOT_STOCKS
+})
+const quickLabel = computed(() => (recent.value.length ? '最近查询' : '热门股票'))
+const quickHint = computed(() =>
+  recent.value.length ? '本机最近查询过的股票' : '按当日成交额排序',
+)
 
 let debounceTimer: number | undefined
 let requestSeq = 0
 
-function openStock(code: string): void {
+function readRecent(): QuickPick[] {
+  try {
+    const raw = window.localStorage.getItem(RECENT_KEY)
+    if (!raw) return []
+    const parsed: unknown = JSON.parse(raw)
+    if (!Array.isArray(parsed)) return []
+    return parsed
+      .filter(
+        (item): item is QuickPick =>
+          !!item &&
+          typeof item === 'object' &&
+          typeof (item as QuickPick).code === 'string' &&
+          /^\d{6}$/.test((item as QuickPick).code),
+      )
+      .map((item) => ({ code: item.code, name: typeof item.name === 'string' ? item.name : '' }))
+      .slice(0, RECENT_LIMIT)
+  } catch {
+    return []
+  }
+}
+
+function remember(code: string, name: string): void {
+  const next = [{ code, name }, ...recent.value.filter((item) => item.code !== code)].slice(
+    0,
+    RECENT_LIMIT,
+  )
+  recent.value = next
+  try {
+    window.localStorage.setItem(RECENT_KEY, JSON.stringify(next))
+  } catch {
+    // 隐私模式或配额已满时忽略，不影响查询
+  }
+}
+
+function openStock(code: string, name = ''): void {
   const value = code.trim()
   if (!/^\d{6}$/.test(value)) {
     error.value = '请输入 6 位股票代码'
@@ -38,12 +93,30 @@ function openStock(code: string): void {
   }
   error.value = ''
   open.value = false
+  remember(value, name)
   void router.push({ name: 'stock', params: { symbol: value } })
 }
 
 function choose(item: StockSearchItem): void {
   error.value = ''
+  remember(item.code, item.name)
   void router.push({ name: 'stock', params: { symbol: item.code } })
+}
+
+/** 有本机最近查询时不请求；失败静默回落到固定热门，入口不空 */
+async function loadHot(): Promise<void> {
+  if (recent.value.length) return
+  hotLoading.value = true
+  try {
+    const { data } = await marketApi.hotStocks(QUICK_LIMIT)
+    hot.value = data
+      .filter((item) => /^\d{6}$/.test(item.code) && item.name)
+      .map((item) => ({ code: item.code, name: item.name }))
+  } catch {
+    hot.value = []
+  } finally {
+    hotLoading.value = false
+  }
 }
 
 async function runSearch(text: string): Promise<void> {
@@ -142,6 +215,7 @@ function onDocumentPointerDown(event: PointerEvent): void {
 
 onMounted(() => {
   document.addEventListener('pointerdown', onDocumentPointerDown)
+  void loadHot()
 })
 
 onBeforeUnmount(() => {
@@ -154,15 +228,8 @@ onBeforeUnmount(() => {
   <section ref="root" class="rounded-lg border border-line bg-canvas p-5">
     <div class="flex flex-wrap items-start justify-between gap-4">
       <div>
-        <div class="flex items-center gap-2">
-          <h2 class="text-sm font-semibold text-ink">个股查询</h2>
-          <span
-            class="rounded-full bg-primary-soft px-2 py-0.5 text-[11px] font-medium text-primary"
-          >
-            直达详情
-          </span>
-        </div>
-        <p class="mt-1 text-xs text-ink-3">
+        <h2 class="text-sm font-semibold text-ink">个股查询</h2>
+        <p class="mt-1 text-xs text-ink-2">
           支持代码、名称与拼音首字母，选中后直接进入个股页查看报价、K 线与 AI 分析。
         </p>
       </div>
@@ -228,16 +295,26 @@ onBeforeUnmount(() => {
     </div>
 
     <div class="mt-3 flex flex-wrap items-center gap-2 text-[11px] text-ink-3">
-      <span>快捷查询</span>
-      <button
-        v-for="item in HOT_STOCKS"
-        :key="item.code"
-        type="button"
-        class="rounded-full border border-line px-2.5 py-1 transition-colors hover:border-line-strong hover:text-ink"
-        @click="openStock(item.code)"
-      >
-        {{ item.name }} <span class="tabular-nums">{{ item.code }}</span>
-      </button>
+      <span :title="quickHint">{{ quickLabel }}</span>
+      <template v-if="hotLoading && !recent.length">
+        <div
+          v-for="index in 3"
+          :key="index"
+          class="h-[30px] w-28 animate-pulse rounded-full bg-surface-2"
+        />
+      </template>
+      <template v-else>
+        <button
+          v-for="item in quickPicks"
+          :key="item.code"
+          type="button"
+          class="rounded-full border border-line px-3 py-1.5 text-[12px] text-ink-2 transition-colors hover:border-line-strong hover:text-ink"
+          @click="openStock(item.code, item.name)"
+        >
+          {{ item.name || item.code }}
+          <span v-if="item.name" class="tabular-nums text-ink-3">{{ item.code }}</span>
+        </button>
+      </template>
     </div>
 
     <p v-if="error" class="mt-3 rounded-md bg-danger-soft px-3 py-2 text-[13px] text-danger">

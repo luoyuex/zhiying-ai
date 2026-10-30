@@ -6,6 +6,7 @@ import {
   notifyPriceAlertsChanged,
   usePriceAlertsVersion,
 } from '@/composables/usePriceAlertsSync'
+import { alertActionLabel, alertTargetText } from '@/utils/alerts'
 import { formatDateTime } from '@/utils/report'
 
 const alerts = ref<PriceAlert[]>([])
@@ -19,20 +20,8 @@ const triggered = computed(() =>
   alerts.value.filter((alert) => alert.status === 'triggered').slice(0, 8),
 )
 
-function label(alert: PriceAlert): string {
-  if (alert.kind === 'entry') return '入场'
-  if (alert.kind === 'take_profit') return '止盈'
-  if (alert.kind === 'stop_loss') return '止损'
-  return alert.direction === 'above' ? '涨到' : '跌破'
-}
-
-function threshold(alert: PriceAlert): string {
-  if (alert.kind === 'entry' || alert.kind === 'stop_loss') {
-    return `≤ ${alert.target_price.toFixed(2)}`
-  }
-  if (alert.kind === 'take_profit') return `≥ ${alert.target_price.toFixed(2)}`
-  return alert.target_price.toFixed(2)
-}
+const label = alertActionLabel
+const threshold = alertTargetText
 
 async function load(): Promise<void> {
   loading.value = true
