@@ -374,15 +374,21 @@ async def run(args: argparse.Namespace) -> None:
     # 按股拉一次前复权日 K（MarketDataService 自带缓存与限流）
     market = MarketDataService(get_redis())
     klines: dict[str, list] = {}
+    delayed_symbols: set[str] = set()
     symbols = sorted({row.symbol for row in reports})
     for index, symbol in enumerate(symbols, 1):
         try:
             series = await market.get_kline(symbol, period=KlinePeriod.DAY, adjust=Adjust.QFQ)
             klines[symbol] = series.bars
+            if series.delayed:
+                delayed_symbols.add(symbol)
         except Exception as exc:  # noqa: BLE001 —— 单股失败不应中断整体回测
             print(f"K 线获取失败 {symbol}: {exc}")
         if index % 20 == 0:
             print(f"K 线进度 {index}/{len(symbols)}")
+    if delayed_symbols:
+        print(f"警告：{len(delayed_symbols)} 只股票的 K 线来自过期缓存（行情源失败自动兜底），"
+              "统计可能不含最近交易日——先用 app.scripts.check_proxy 自检行情源。")
 
     questions = build_questions(args.threshold, args.horizon)
     semaphore = asyncio.Semaphore(args.concurrency)
